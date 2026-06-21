@@ -3,19 +3,18 @@ import uuid
 from datetime import datetime, timezone
 
 from anthropic import Anthropic
-from sqlalchemy import create_engine, select, update
-from sqlalchemy.orm import sessionmaker
+from supabase import create_client
 
 from app.core.config import settings
-from app.models.review import ReviewFile, ReviewJob, ReviewResult
 from app.services.parser import parse_file
 from app.workers.celery_app import celery_app
 
-CHUNK_SIZE = 10  # 한 번의 LLM 호출에 포함할 최대 페이지 수
+CHUNK_SIZE = 10
 
-_sync_url = settings.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "")
-_engine = create_engine(_sync_url)
-_Session = sessionmaker(_engine, expire_on_commit=False)
+
+def _get_sb():
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+
 
 SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
 주어진 텍스트에서 두 가지 항목을 검출해야 합니다.
@@ -63,7 +62,6 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
         messages=[{"role": "user", "content": _build_user_prompt(filename, pages)}],
     )
     raw = response.content[0].text.strip()
-    # 마크다운 코드 펜스 제거
     if raw.startswith("```"):
         lines = [l for l in raw.split("\n") if not l.startswith("```")]
         raw = "\n".join(lines).strip()
@@ -74,21 +72,19 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
         return []
 
 
-def _process_file(session, client: Anthropic, review_file: ReviewFile) -> None:
+def _process_file(sb, client: Anthropic, review_file: dict) -> None:
     parsed = parse_file(
-        review_file.storage_path,
-        review_file.mime_type,
-        review_file.id,
-        review_file.original_filename,
-        review_file.proposal_type,
+        review_file["storage_path"],
+        review_file["mime_type"],
+        review_file["id"],
+        review_file["original_filename"],
+        review_file["proposal_type"],
     )
 
-    session.execute(
-        update(ReviewFile)
-        .where(ReviewFile.id == review_file.id)
-        .values(total_pages=parsed["total_pages"], parse_error=parsed["parse_error"])
-    )
-    session.commit()
+    sb.table("review_files").update({
+        "total_pages": parsed["total_pages"],
+        "parse_error": parsed["parse_error"],
+    }).eq("id", review_file["id"]).execute()
 
     if parsed["parse_error"]:
         return
@@ -96,58 +92,43 @@ def _process_file(session, client: Anthropic, review_file: ReviewFile) -> None:
     pages = parsed["pages"]
     for i in range(0, len(pages), CHUNK_SIZE):
         chunk = pages[i : i + CHUNK_SIZE]
-        items = _call_llm(client, review_file.original_filename, chunk)
+        items = _call_llm(client, review_file["original_filename"], chunk)
         for item in items:
-            session.add(
-                ReviewResult(
-                    id=str(uuid.uuid4()),
-                    file_id=review_file.id,
-                    category=item.get("category", ""),
-                    detected_text=item.get("detected_text", ""),
-                    suggestion=item.get("suggestion"),
-                    page_number=int(item.get("page_number", 0)),
-                    context=item.get("context"),
-                )
-            )
-        session.commit()
+            sb.table("review_results").insert({
+                "id": str(uuid.uuid4()),
+                "file_id": review_file["id"],
+                "category": item.get("category", ""),
+                "detected_text": item.get("detected_text", ""),
+                "suggestion": item.get("suggestion"),
+                "page_number": int(item.get("page_number", 0)),
+                "context": item.get("context"),
+            }).execute()
 
 
 @celery_app.task(bind=True, name="app.workers.review_task.run_review")
 def run_review(self, job_id: str) -> None:
-    with _Session() as session:
-        try:
-            session.execute(
-                update(ReviewJob)
-                .where(ReviewJob.id == job_id)
-                .values(status="processing", started_at=datetime.now(timezone.utc))
-            )
-            session.commit()
+    sb = _get_sb()
+    try:
+        sb.table("proposal_review").update({
+            "status": "processing",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", job_id).execute()
 
-            files = (
-                session.execute(
-                    select(ReviewFile).where(ReviewFile.job_id == job_id)
-                )
-                .scalars()
-                .all()
-            )
+        files_res = sb.table("review_files").select("*").eq("job_id", job_id).execute()
+        files = files_res.data or []
 
-            client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-            for review_file in files:
-                _process_file(session, client, review_file)
+        client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        for review_file in files:
+            _process_file(sb, client, review_file)
 
-            session.execute(
-                update(ReviewJob)
-                .where(ReviewJob.id == job_id)
-                .values(status="completed", completed_at=datetime.now(timezone.utc))
-            )
-            session.commit()
+        sb.table("proposal_review").update({
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", job_id).execute()
 
-        except Exception as exc:
-            session.rollback()
-            session.execute(
-                update(ReviewJob)
-                .where(ReviewJob.id == job_id)
-                .values(status="failed", error_message=str(exc)[:1000])
-            )
-            session.commit()
-            raise
+    except Exception as exc:
+        sb.table("proposal_review").update({
+            "status": "failed",
+            "error_message": str(exc)[:1000],
+        }).eq("id", job_id).execute()
+        raise
