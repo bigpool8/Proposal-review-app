@@ -195,6 +195,12 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 
 <script>
 const DEFAULT_API = 'https://proposal-review-backend-production.up.railway.app';
+(function() {
+  const stored = localStorage.getItem('api_url');
+  if (stored && /localhost|127\.0\.0\.1/.test(stored) && !/localhost|127\./.test(DEFAULT_API)) {
+    localStorage.removeItem('api_url');
+  }
+})();
 let API = localStorage.getItem('api_url') || DEFAULT_API;
 let jobId = null, pollTmr = null;
 let files = { qualitative:[], quantitative:[], presentation:[] };
