@@ -29,7 +29,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 .main-sm{max-width:36rem;margin:0 auto;padding:2rem 1.5rem}
 .card{background:#fff;border-radius:.75rem;border:1px solid #e5e7eb;padding:1.125rem;margin-bottom:.75rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .card:hover{border-color:#93c5fd;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.8125rem;font-weight:500;padding:.2rem .65rem;border-radius:9999px}
+.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.9375rem;font-weight:600;padding:.3rem .85rem;border-radius:9999px}
 .badge-gray{background:#f3f4f6;color:#4b5563}
 .badge-blue{background:#dbeafe;color:#1d4ed8}
 .badge-green{background:#dcfce7;color:#15803d}
@@ -211,7 +211,7 @@ const STATUS = {
   draft:      { t:'업로드 중',  c:'badge-gray' },
   pending:    { t:'검토 대기',  c:'badge-blue' },
   processing: { t:'검토 중',   c:'badge-blue', s:true },
-  completed:  { t:'완료',      c:'badge-green' },
+  completed:  { t:'검토 결과', c:'badge-green' },
   failed:     { t:'오류',      c:'badge-red' },
 };
 
