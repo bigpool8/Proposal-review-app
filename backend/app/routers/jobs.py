@@ -215,22 +215,20 @@ def delete_job(
     job = _get_job(job_id, current_user["id"], sb, with_files=True)
     files = job.get("review_files") or []
 
+    # 로컬 파일 정리 (Railway 임시 파일시스템 — 실패해도 무시)
     for f in files:
-        if os.path.exists(f["storage_path"]):
-            os.remove(f["storage_path"])
-        parent = os.path.dirname(f["storage_path"])
-        if os.path.isdir(parent) and not os.listdir(parent):
-            os.rmdir(parent)
+        try:
+            path = f.get("storage_path") or ""
+            if path and os.path.exists(path):
+                os.remove(path)
+            parent = os.path.dirname(path) if path else ""
+            if parent and os.path.isdir(parent) and not os.listdir(parent):
+                os.rmdir(parent)
+        except OSError:
+            pass
 
-    file_ids = [f["id"] for f in files]
-    if file_ids:
-        sb.table("review_results").delete().in_("file_id", file_ids).execute()
-    sb.table("review_files").delete().eq("job_id", job_id).execute()
+    # proposal_review 삭제 → CASCADE로 review_files, review_results 자동 삭제
     sb.table("proposal_review").delete().eq("id", job_id).execute()
-
-    job_dir = os.path.join(UPLOAD_BASE, job_id)
-    if os.path.isdir(job_dir) and not os.listdir(job_dir):
-        os.rmdir(job_dir)
 
 
 # ── 검토 시작 ─────────────────────────────────────────────
