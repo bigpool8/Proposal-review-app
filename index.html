@@ -219,8 +219,11 @@ async function api(path, opts={}) {
   if (tk()) h['Authorization'] = 'Bearer '+tk();
   if (opts.body instanceof FormData) delete h['Content-Type'];
   const r = await fetch(API+path, {...opts, headers:h});
-  if (r.status===401) { doLogout(); throw new Error('401'); }
   const d = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (r.status===401) {
+    if (tk()) doLogout();  // 기존 세션 만료일 때만 로그아웃
+    throw new Error(d?.detail || '인증에 실패했습니다.');
+  }
   if (!r.ok) throw new Error(d?.detail || r.statusText);
   return d;
 }
@@ -268,8 +271,8 @@ async function doLogin() {
     show('dashboard');
   } catch(e){
     let msg = e.message||'로그인에 실패했습니다.';
-    if (!msg || msg==='Failed to fetch' || msg.toLowerCase().includes('fetch')) {
-      msg = '서버에 연결할 수 없습니다. 백엔드 서버 주소를 확인하세요.';
+    if (!msg || msg==='Failed to fetch' || msg.toLowerCase().includes('fetch') || msg.toLowerCase().includes('network')) {
+      msg = '백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하거나, 아래에서 서버 주소를 수정하세요.';
       showServerPanel();
     }
     err.textContent=msg; err.style.display='block';
