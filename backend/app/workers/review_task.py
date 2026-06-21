@@ -7,7 +7,6 @@ from supabase import create_client
 
 from app.core.config import settings
 from app.services.parser import parse_file
-from app.workers.celery_app import celery_app
 
 CHUNK_SIZE = 10
 
@@ -132,6 +131,3 @@ def run_review_sync(job_id: str) -> None:
         }).eq("id", job_id).execute()
 
 
-@celery_app.task(bind=True, name="app.workers.review_task.run_review")
-def run_review(self, job_id: str) -> None:
-    run_review_sync(job_id)
