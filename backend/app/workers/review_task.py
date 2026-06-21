@@ -105,8 +105,7 @@ def _process_file(sb, client: Anthropic, review_file: dict) -> None:
             }).execute()
 
 
-@celery_app.task(bind=True, name="app.workers.review_task.run_review")
-def run_review(self, job_id: str) -> None:
+def run_review_sync(job_id: str) -> None:
     sb = _get_sb()
     try:
         sb.table("proposal_review").update({
@@ -131,4 +130,8 @@ def run_review(self, job_id: str) -> None:
             "status": "failed",
             "error_message": str(exc)[:1000],
         }).eq("id", job_id).execute()
-        raise
+
+
+@celery_app.task(bind=True, name="app.workers.review_task.run_review")
+def run_review(self, job_id: str) -> None:
+    run_review_sync(job_id)

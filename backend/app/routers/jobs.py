@@ -2,7 +2,7 @@ import os
 import uuid
 
 import aiofiles
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from supabase import Client
 
 from app.database import get_supabase
@@ -237,10 +237,11 @@ def delete_job(
 @router.post("/{job_id}/start")
 def start_job(
     job_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     sb: Client = Depends(get_supabase),
 ):
-    from app.workers.review_task import run_review
+    from app.workers.review_task import run_review_sync
 
     job = _get_job(job_id, current_user["id"], sb, with_files=True)
     if job["status"] != "draft":
@@ -249,11 +250,8 @@ def start_job(
     if not files:
         raise HTTPException(status_code=400, detail="파일을 먼저 업로드하세요.")
 
-    task = run_review.delay(job_id)
-    sb.table("proposal_review").update({
-        "status": "pending",
-        "celery_task_id": task.id,
-    }).eq("id", job_id).execute()
+    sb.table("proposal_review").update({"status": "pending"}).eq("id", job_id).execute()
+    background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}
 
 
@@ -341,10 +339,11 @@ def get_job_results(
 @router.post("/{job_id}/retry")
 def retry_job(
     job_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     sb: Client = Depends(get_supabase),
 ):
-    from app.workers.review_task import run_review
+    from app.workers.review_task import run_review_sync
 
     job = _get_job(job_id, current_user["id"], sb, with_files=True)
     if job["status"] != "failed":
@@ -355,12 +354,11 @@ def retry_job(
         sb.table("review_results").delete().in_("file_id", file_ids).execute()
         sb.table("review_files").update({"parse_error": None, "total_pages": None}).in_("id", file_ids).execute()
 
-    task = run_review.delay(job_id)
     sb.table("proposal_review").update({
         "status": "pending",
-        "celery_task_id": task.id,
         "error_message": None,
     }).eq("id", job_id).execute()
+    background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}
 
 
