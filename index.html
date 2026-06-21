@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 제안서 검증 시스템</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;color:#111827}
+.page{display:none;min-height:100vh}.page.active{display:block}
+nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:relative}
+.auth-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb}
+.auth-title{font-size:2rem;font-weight:700;color:#7c3aed;margin-bottom:2rem}
+.auth-box{background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid #f3f4f6;padding:3rem;width:100%;max-width:28rem}
+.form-group{margin-bottom:1.25rem}
+label{display:block;font-size:1rem;font-weight:500;color:#374151;margin-bottom:.5rem}
+input[type=text],input[type=password]{width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.75rem 1rem;font-size:1rem;outline:none;transition:box-shadow .15s}
+input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
+.btn{border:none;cursor:pointer;font-size:.9375rem;font-weight:500;border-radius:.5rem;padding:.625rem 1.125rem;transition:background .15s,opacity .15s}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-full{width:100%;padding:.75rem 1rem;font-size:1rem}
+.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover:not(:disabled){background:#1d4ed8}
+.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover:not(:disabled){background:#dc2626}
+.btn-outline{background:#fff;color:#374151;border:1px solid #e5e7eb}.btn-outline:hover:not(:disabled){background:#f9fafb}
+.btn-sm{padding:.375rem .875rem;font-size:.875rem}
+.error-msg{color:#ef4444;background:#fef2f2;padding:.625rem .875rem;border-radius:.5rem;font-size:.875rem;margin-top:.5rem}
+.link{color:#2563eb;cursor:pointer;font-weight:500}.link:hover{text-decoration:underline}
+.main{max-width:56rem;margin:0 auto;padding:2rem 1.5rem}
+.main-sm{max-width:36rem;margin:0 auto;padding:2rem 1.5rem}
+.card{background:#fff;border-radius:.75rem;border:1px solid #e5e7eb;padding:1.125rem;margin-bottom:.75rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:#93c5fd;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.8125rem;font-weight:500;padding:.2rem .65rem;border-radius:9999px}
+.badge-gray{background:#f3f4f6;color:#4b5563}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-red{background:#fee2e2;color:#dc2626}
+.spinner{display:inline-block;width:.75rem;height:.75rem;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
+.spinner-lg{width:2.5rem;height:2.5rem;border-width:3px;border-color:#3b82f6;border-top-color:transparent}
+@keyframes spin{to{transform:rotate(360deg)}}
+.upload-section{background:#fff;border-radius:.75rem;border:1px solid #e5e7eb;padding:1.25rem;margin-bottom:1rem}
+.drop-zone{border:2px dashed #d1d5db;border-radius:.5rem;padding:1.5rem;text-align:center;cursor:pointer;transition:all .15s;user-select:none}
+.drop-zone:hover,.drop-zone.drag{border-color:#60a5fa;background:#eff6ff}
+.file-item{display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border-radius:.5rem;padding:.5rem .75rem;margin-top:.5rem}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem}
+.summary-card{background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem}
+.result-file{border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden;background:#fff;margin-bottom:.75rem}
+.result-file-hdr{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;cursor:pointer}
+.result-file-hdr:hover{background:#f9fafb}
+.result-sec-hdr{padding:.4rem 1.25rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid transparent}
+.result-sec-hdr.sup{background:#fffbeb;border-color:#fef3c7}
+.result-sec-hdr.typ{background:#fef2f2;border-color:#fee2e2}
+.result-item{padding:.75rem 1.25rem;display:flex;align-items:flex-start;gap:.75rem}
+.result-item.sup{background:rgba(251,191,36,.06)}
+.result-item.typ{background:rgba(239,68,68,.06)}
+.dot{width:.5rem;height:.5rem;border-radius:50%;flex-shrink:0;margin-top:.375rem}
+.pg-badge{font-size:.8125rem;font-weight:600;white-space:nowrap;flex-shrink:0;margin-top:.125rem}
+.chevron{transition:transform .2s}
+.chevron.open{transform:rotate(180deg)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:.875rem;padding:1.5rem;max-width:20rem;width:calc(100% - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#toast-container{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem}
+.toast{background:#1f2937;color:#fff;padding:.625rem 1rem;border-radius:.5rem;font-size:.875rem;max-width:20rem;animation:slideIn .2s ease}
+.toast.success{background:#065f46}.toast.error{background:#991b1b}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+.flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
+.gap-2{gap:.5rem}.gap-3{gap:.75rem}
+.text-sm{font-size:.875rem}.text-xs{font-size:.75rem}.text-gray{color:#6b7280}
+.text-center{text-align:center}.bold{font-weight:600}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mb-4{margin-bottom:1rem}
+</style>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<!-- ── 로그인 ──────────────────────────────────────────── -->
+<div id="page-login" class="page active">
+  <div class="auth-wrap">
+    <h1 class="auth-title">AI 제안서 검증 시스템</h1>
+    <div class="auth-box">
+      <p style="font-size:1.125rem;font-weight:700;color:#2563eb;margin-bottom:2rem">로그인하여 시작하세요</p>
+      <div class="form-group"><label>아이디</label><input type="text" id="l-user" autocomplete="username"></div>
+      <div class="form-group"><label>패스워드</label><input type="password" id="l-pass" autocomplete="current-password"></div>
+      <div id="l-err" class="error-msg" style="display:none"></div>
+      <button class="btn btn-primary btn-full mt-4" id="l-btn" onclick="doLogin()">로그인</button>
+      <div id="l-server-wrap" style="display:none;margin-top:1rem;padding:1rem;background:#f8fafc;border-radius:.5rem;border:1px solid #e2e8f0">
+        <label style="font-size:.8125rem;font-weight:500;color:#64748b;margin-bottom:.375rem;display:block">백엔드 서버 주소</label>
+        <input type="text" id="l-api" placeholder="https://your-server.com" autocomplete="off" style="font-size:.875rem;padding:.5rem .75rem">
+        <p class="text-xs mt-1" id="l-api-hint" style="color:#64748b"></p>
+      </div>
+      <p class="text-center text-sm text-gray mt-4">계정이 없으신가요? <span class="link" onclick="show('register')">회원가입</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 회원가입 ─────────────────────────────────────────── -->
+<div id="page-register" class="page">
+  <div class="auth-wrap">
+    <h1 class="auth-title">AI 제안서 검증 시스템</h1>
+    <div class="auth-box">
+      <p style="font-size:1.5rem;font-weight:700;margin-bottom:2rem">회원가입</p>
+      <div class="form-group"><label>아이디</label><input type="text" id="r-user" autocomplete="username"></div>
+      <div class="form-group">
+        <label>패스워드</label><input type="password" id="r-pass" autocomplete="new-password">
+        <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+      </div>
+      <div class="form-group"><label>패스워드 확인</label><input type="password" id="r-conf" autocomplete="new-password"></div>
+      <div id="r-err" class="error-msg" style="display:none"></div>
+      <button class="btn btn-primary btn-full mt-4" id="r-btn" onclick="doRegister()">회원가입</button>
+      <p class="text-center text-sm text-gray mt-4">이미 계정이 있으신가요? <span class="link" onclick="show('login')">로그인</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 대시보드 ─────────────────────────────────────────── -->
+<div id="page-dashboard" class="page">
+  <nav>
+    <span style="font-size:1.25rem;font-weight:700;color:#4f46e5">AI 제안서 검증 시스템</span>
+    <div class="flex items-center gap-3">
+      <span id="d-username" class="bold" style="color:#065f46"></span>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+  <div class="main">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <input type="checkbox" id="chk-all" onchange="toggleAll()" style="width:1rem;height:1rem;accent-color:#7c3aed">
+        <span class="text-sm text-gray">전체 선택</span>
+        <button class="btn btn-danger btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 새 검토 요청</button>
+    </div>
+    <div id="d-loading" class="text-center" style="padding:5rem 0"><div class="spinner spinner-lg" style="display:inline-block"></div></div>
+    <div id="d-empty" style="display:none;text-align:center;padding:5rem 0;color:#9ca3af"><p>아직 검토 요청이 없습니다.</p><p class="mt-1">새 검토 요청을 시작하세요.</p></div>
+    <div id="d-list"></div>
+  </div>
+</div>
+
+<!-- ── 업로드 ──────────────────────────────────────────── -->
+<div id="page-upload" class="page">
+  <nav>
+    <span class="link bold" style="color:#7c3aed" onclick="show('dashboard')">← 검토 이력</span>
+    <span style="font-size:1.125rem;font-weight:700;color:#4f46e5;position:absolute;left:50%;transform:translateX(-50%)">제안서 업로드</span>
+    <div class="flex items-center gap-3">
+      <span id="u-username" class="bold" style="color:#065f46"></span>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+  <div class="main-sm">
+    <div id="sec-qualitative"></div>
+    <div id="sec-quantitative"></div>
+    <div id="sec-presentation"></div>
+    <div style="padding-top:.5rem">
+      <button class="btn btn-primary btn-full" id="start-btn" onclick="showModal()" disabled>검토 시작</button>
+      <p id="start-hint" class="text-sm text-center mt-2" style="color:#374151">파일을 1개 이상 업로드하면 검토를 시작할 수 있습니다.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 결과 ────────────────────────────────────────────── -->
+<div id="page-results" class="page">
+  <nav>
+    <span class="link bold" style="color:#7c3aed" onclick="show('dashboard')">← 검토 이력</span>
+    <div id="res-nav-title" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:.5rem">
+      <span style="font-size:1.125rem;font-weight:700;color:#4f46e5">검토 결과</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="res-username" class="bold" style="color:#065f46"></span>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+  <div id="res-loading" class="text-center" style="padding:8rem 0">
+    <div class="spinner spinner-lg" style="display:inline-block"></div>
+    <p class="text-gray mt-2">검토 중입니다. 파일 크기에 따라 수 분이 소요될 수 있습니다.</p>
+  </div>
+  <div id="res-failed" style="display:none"></div>
+  <div id="res-content" style="display:none">
+    <div class="main">
+      <div class="summary-grid" id="res-summary"></div>
+      <div id="res-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 확인 모달 ────────────────────────────────────────── -->
+<div id="modal" class="modal-bg" style="display:none">
+  <div class="modal">
+    <p class="bold" style="margin-bottom:.5rem">검토를 시작할까요?</p>
+    <p class="text-sm text-gray" style="margin-bottom:1.25rem">검토 시작 후에는 파일 변경이 불가합니다.</p>
+    <div class="flex gap-2">
+      <button class="btn btn-outline" style="flex:1" onclick="hideModal()">취소</button>
+      <button class="btn btn-primary" style="flex:1" id="modal-start-btn" onclick="doStart()">시작</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_API = 'http://localhost:8000';
+let API = localStorage.getItem('api_url') || DEFAULT_API;
+let jobId = null, pollTmr = null;
+let files = { qualitative:[], quantitative:[], presentation:[] };
+let sel = new Set();
+const LABELS = { qualitative:'정성제안서', quantitative:'정량제안서', presentation:'발표본' };
+const STATUS = {
+  draft:      { t:'업로드 중',  c:'badge-gray' },
+  pending:    { t:'검토 대기',  c:'badge-blue' },
+  processing: { t:'검토 중',   c:'badge-blue', s:true },
+  completed:  { t:'완료',      c:'badge-green' },
+  failed:     { t:'오류',      c:'badge-red' },
+};
+
+/* ── utils ────────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const tk = ()  => localStorage.getItem('access_token');
+const un = ()  => localStorage.getItem('username') || '';
+const esc = s  => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function api(path, opts={}) {
+  const h = { 'Content-Type':'application/json', ...(opts.headers||{}) };
+  if (tk()) h['Authorization'] = 'Bearer '+tk();
+  if (opts.body instanceof FormData) delete h['Content-Type'];
+  const r = await fetch(API+path, {...opts, headers:h});
+  if (r.status===401) { doLogout(); throw new Error('401'); }
+  const d = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (!r.ok) throw new Error(d?.detail || r.statusText);
+  return d;
+}
+
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast'+(type?' '+type:'');
+  el.textContent = msg;
+  $('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function setBtn(id, loading, normal, loadingText) {
+  const b = $(id); b.disabled = loading; b.textContent = loading ? loadingText : normal;
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function fmtBytes(b) { return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
+function fileSummary(c) {
+  return [c.qualitative&&`정성 ${c.qualitative}개`, c.quantitative&&`정량 ${c.quantitative}개`, c.presentation&&`발표본 ${c.presentation}개`].filter(Boolean).join(' · ') || '파일 없음';
+}
+
+function show(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $('page-'+page).classList.add('active');
+  if (page==='dashboard') loadDashboard();
+}
+
+/* ── 인증 ─────────────────────────────────────────────── */
+async function doLogin() {
+  const apiInput = $('l-api');
+  if (apiInput && apiInput.value.trim()) {
+    API = apiInput.value.trim().replace(/\/+$/, '');
+    localStorage.setItem('api_url', API);
+  }
+  const u=$('l-user').value.trim(), p=$('l-pass').value, err=$('l-err');
+  err.style.display='none';
+  setBtn('l-btn',true,'로그인','로그인 중...');
+  try {
+    const d = await api('/api/auth/login',{method:'POST',body:JSON.stringify({username:u,password:p})});
+    localStorage.setItem('access_token',d.access_token);
+    localStorage.setItem('username',u);
+    show('dashboard');
+  } catch(e){
+    let msg = e.message||'로그인에 실패했습니다.';
+    if (!msg || msg==='Failed to fetch' || msg.toLowerCase().includes('fetch')) {
+      msg = '서버에 연결할 수 없습니다. 백엔드 서버 주소를 확인하세요.';
+      showServerPanel();
+    }
+    err.textContent=msg; err.style.display='block';
+  }
+  finally { setBtn('l-btn',false,'로그인','로그인 중...'); }
+}
+
+function showServerPanel(){
+  const wrap=$('l-server-wrap');
+  if(!wrap) return;
+  wrap.style.display='block';
+  const inp=$('l-api');
+  if(inp && !inp.value) inp.value=API;
+  updateApiHint();
+  inp?.focus();
+}
+
+async function doRegister() {
+  const u=$('r-user').value.trim(), p=$('r-pass').value, c=$('r-conf').value, err=$('r-err');
+  err.style.display='none';
+  if (p.length<6||!/[A-Za-z]/.test(p)||!/\d/.test(p)){ err.textContent='영문+숫자 포함 6자 이상이어야 합니다.'; err.style.display='block'; return; }
+  if (p!==c){ err.textContent='패스워드가 일치하지 않습니다.'; err.style.display='block'; return; }
+  setBtn('r-btn',true,'회원가입','처리 중...');
+  try {
+    await api('/api/auth/register',{method:'POST',body:JSON.stringify({username:u,password:p})});
+    toast('회원가입 완료! 로그인해 주세요.','success');
+    show('login');
+  } catch(e){ err.textContent=e.message||'회원가입에 실패했습니다.'; err.style.display='block'; }
+  finally { setBtn('r-btn',false,'회원가입','처리 중...'); }
+}
+
+function doLogout() {
+  localStorage.removeItem('access_token'); localStorage.removeItem('username');
+  if(pollTmr) clearTimeout(pollTmr);
+  show('login');
+}
+
+/* ── 대시보드 ───────────────────────────────────────────── */
+async function loadDashboard() {
+  if(pollTmr) clearTimeout(pollTmr);
+  sel.clear(); updateDel();
+  $('d-username').textContent=un();
+  $('d-loading').style.display='block'; $('d-list').innerHTML=''; $('d-empty').style.display='none';
+  try {
+    let jobs = await api('/api/jobs');
+    const empty = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation===0);
+    await Promise.allSettled(empty.map(j=>api('/api/jobs/'+j.id+'/delete',{method:'POST'})));
+    jobs = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation>0);
+    renderJobs(jobs);
+    if (jobs.some(j=>j.status==='pending'||j.status==='processing')) pollTmr=setTimeout(loadDashboard,10000);
+  } catch(e){ /* ignore */ }
+  $('d-loading').style.display='none';
+}
+
+function renderJobs(jobs) {
+  $('d-empty').style.display = jobs.length===0?'block':'none';
+  const list=$('d-list'); list.innerHTML='';
+  jobs.forEach(j=>{
+    const s=STATUS[j.status]||{t:j.status,c:'badge-gray'};
+    const rs=j.status==='completed'&&(j.superlative_count>0||j.typo_count>0)
+      ?[j.superlative_count>0&&`최상급 ${j.superlative_count}건`,j.typo_count>0&&`오타 ${j.typo_count}건`].filter(Boolean).join(' · '):null;
+    const isSel=sel.has(j.id);
+    const div=document.createElement('div');
+    div.className='card flex items-center gap-3';
+    if(isSel) div.style.borderColor='#a78bfa';
+    div.innerHTML=`
+      <input type="checkbox" ${isSel?'checked':''} style="width:1rem;height:1rem;accent-color:#7c3aed;flex-shrink:0" onclick="event.stopPropagation();toggleSel('${j.id}',this)">
+      <div style="flex:1;min-width:0">
+        <p class="text-xs text-gray">${fmtDate(j.created_at)}</p>
+        <p style="font-size:.9375rem;color:#374151;margin-top:.125rem">${fileSummary(j.file_counts)}</p>
+        ${rs?`<p class="text-xs text-gray mt-1">${rs}</p>`:''}
+      </div>
+      <span class="badge ${s.c}">${s.s?'<span class="spinner"></span>':''}${s.t}</span>`;
+    div.onclick=e=>{ if(sel.size>0)return; j.status==='draft'?openUpload(j.id):openResults(j.id); };
+    list.appendChild(div);
+  });
+}
+
+function toggleSel(id,chk){ chk.checked?sel.add(id):sel.delete(id); updateDel(); }
+function toggleAll(){ const c=$('chk-all').checked; document.querySelectorAll('#d-list input[type=checkbox]').forEach(x=>{x.checked=c;const m=x.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];if(m){c?sel.add(m):sel.delete(m);}}); updateDel(); }
+function updateDel(){ const b=$('del-btn'); b.style.display=sel.size>0?'inline-flex':'none'; b.textContent=`선택 삭제 (${sel.size})`; }
+
+async function deleteSelected(){
+  setBtn('del-btn',true,'','삭제 중...');
+  try {
+    await Promise.all([...sel].map(id=>api('/api/jobs/'+id+'/delete',{method:'POST'})));
+    toast(sel.size+'건이 삭제되었습니다.','success'); sel.clear(); loadDashboard();
+  } catch(e){ toast('삭제에 실패했습니다.','error'); }
+  finally { updateDel(); }
+}
+
+async function createJob(){
+  setBtn('new-btn',true,'+ 새 검토 요청','생성 중...');
+  try { const d=await api('/api/jobs',{method:'POST'}); openUpload(d.job_id); }
+  catch(e){ toast(e.message,'error'); }
+  finally { setBtn('new-btn',false,'+ 새 검토 요청','생성 중...'); }
+}
+
+/* ── 업로드 ──────────────────────────────────────────── */
+function openUpload(id){
+  jobId=id; files={qualitative:[],quantitative:[],presentation:[]};
+  $('u-username').textContent=un();
+  ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
+  updateStart(); show('upload');
+}
+
+function renderSec(type){
+  const multi=type!=='presentation';
+  const con=$('sec-'+type); con.innerHTML='';
+  const canUp=multi||files[type].length===0;
+  const fHtml=files[type].map(f=>`
+    <div class="file-item">
+      <div style="min-width:0;margin-right:1rem">
+        <p style="font-size:.9375rem;color:#1f2937" class="truncate">${esc(f.original_filename)}</p>
+        <p class="text-xs text-gray">${fmtBytes(f.file_size_bytes)}</p>
+      </div>
+      <button class="btn btn-sm" style="color:#ef4444;background:none;padding:0" onclick="delFile('${type}','${f.id}')">삭제</button>
+    </div>`).join('');
+  const sec=document.createElement('div');
+  sec.className='upload-section';
+  sec.innerHTML=`
+    <div class="flex items-center gap-2" style="margin-bottom:.75rem">
+      <span class="bold" style="font-size:.9375rem">${LABELS[type]}</span>
+      <span class="text-xs text-gray" style="background:#f3f4f6;padding:.125rem .5rem;border-radius:9999px">${multi?'다중 파일':'1개'}</span>
+    </div>
+    ${canUp?`
+    <div class="drop-zone" id="dz-${type}" onclick="$('fi-${type}').click()">
+      <p class="text-sm text-gray">클릭하거나 파일을 드래그하세요</p>
+      <p class="text-xs text-gray mt-1">.ppt .pptx .doc .docx .pdf · 최대 2GB</p>
+      <input type="file" id="fi-${type}" style="display:none" ${multi?'multiple':''} accept=".ppt,.pptx,.doc,.docx,.pdf" onchange="handleInput('${type}',this,${multi})">
+    </div>`:''}
+    <div id="up-${type}" style="display:none" class="text-sm text-gray text-center" style="padding:.75rem">업로드 중...</div>
+    <div id="err-${type}" class="error-msg" style="display:none;margin-top:.5rem"></div>
+    <div>${fHtml}</div>`;
+  con.appendChild(sec);
+  if(canUp){
+    const dz=sec.querySelector('.drop-zone');
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+    dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');handleFiles(type,Array.from(e.dataTransfer.files),multi);});
+  }
+}
+
+function handleInput(type,inp,multi){ handleFiles(type,Array.from(inp.files||[]).slice(0,multi?999:1),multi); }
+
+async function handleFiles(type,flist,multi){
+  const EXTS=['.ppt','.pptx','.doc','.docx','.pdf'];
+  const err=$('err-'+type), up=$('up-'+type);
+  err.style.display='none'; up.style.display='block';
+  for(const f of flist){
+    const ext='.'+((f.name.split('.').pop()||'').toLowerCase());
+    if(!EXTS.includes(ext)){err.textContent='허용되지 않는 형식: '+f.name;err.style.display='block';continue;}
+    if(f.size>2*1024*1024*1024){err.textContent='2GB 초과: '+f.name;err.style.display='block';continue;}
+    const form=new FormData(); form.append('file',f); form.append('proposal_type',type);
+    try {
+      const d=await api('/api/jobs/'+jobId+'/files',{method:'POST',body:form});
+      files[type].push({id:d.file_id,original_filename:d.original_filename,file_size_bytes:f.size});
+    } catch(e){ err.textContent=e.message;err.style.display='block'; }
+  }
+  up.style.display='none';
+  renderSec(type); updateStart();
+}
+
+async function delFile(type,fid){
+  try { await api('/api/jobs/'+jobId+'/files/'+fid,{method:'DELETE'}); files[type]=files[type].filter(f=>f.id!==fid); renderSec(type); updateStart(); }
+  catch(e){ toast(e.message,'error'); }
+}
+
+function updateStart(){
+  const n=files.qualitative.length+files.quantitative.length+files.presentation.length;
+  $('start-btn').disabled=n===0; $('start-hint').style.display=n>0?'none':'block';
+}
+
+function showModal(){ $('modal').style.display='flex'; }
+function hideModal(){ $('modal').style.display='none'; }
+
+async function doStart(){
+  setBtn('modal-start-btn',true,'시작','처리 중...');
+  try { await api('/api/jobs/'+jobId+'/start',{method:'POST'}); hideModal(); openResults(jobId); }
+  catch(e){ toast(e.message,'error'); }
+  finally { setBtn('modal-start-btn',false,'시작','처리 중...'); }
+}
+
+/* ── 결과 ────────────────────────────────────────────── */
+function openResults(id){
+  jobId=id;
+  $('res-username').textContent=un();
+  $('res-loading').style.display='block'; $('res-content').style.display='none'; $('res-failed').style.display='none';
+  show('results'); poll();
+}
+
+async function poll(){
+  if(pollTmr) clearTimeout(pollTmr);
+  try {
+    const d=await api('/api/jobs/'+jobId+'/results');
+    if(d.status==='pending'||d.status==='processing'){
+      $('res-loading').style.display='block'; $('res-content').style.display='none';
+      pollTmr=setTimeout(poll,5000);
+    } else if(d.status==='failed'){
+      $('res-loading').style.display='none';
+      const el=$('res-failed'); el.style.display='block';
+      el.innerHTML=`<div style="max-width:28rem;margin:6rem auto;padding:0 1.5rem;text-align:center">
+        <p style="color:#dc2626;font-weight:600;font-size:1.125rem;margin-bottom:.75rem">검토 중 오류가 발생했습니다</p>
+        ${d.error_message?`<p class="text-sm text-gray" style="margin-bottom:1.5rem">${esc(d.error_message)}</p>`:''}
+        <button class="btn btn-primary btn-sm" onclick="doRetry()">재시도</button>
+      </div>`;
+    } else { renderResults(d); }
+  } catch(e){ toast(e.message,'error'); }
+}
+
+async function doRetry(){
+  try { await api('/api/jobs/'+jobId+'/retry',{method:'POST'}); openResults(jobId); }
+  catch(e){ toast(e.message,'error'); }
+}
+
+function hlCtx(ctx,det){
+  if(!ctx) return '<em style="color:#9ca3af">컨텍스트 없음</em>';
+  const lc=ctx.toLowerCase(),lt=det.toLowerCase(),i=lc.indexOf(lt);
+  if(i===-1) return esc(ctx);
+  return esc(ctx.slice(0,i))+'<strong>'+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
+}
+
+function renderResults(data){
+  $('res-loading').style.display='none'; $('res-content').style.display='block';
+  const s=data.summary;
+  $('res-summary').innerHTML=`
+    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">최상급 표현</p><p style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
+    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">오타</p><p style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
+    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">검토 파일</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개 파일에서 검출</p></div>`;
+  const body=$('res-body'); body.innerHTML='';
+  data.proposal_types.forEach(pt=>{
+    const tot=pt.files.reduce((n,f)=>n+f.superlative_count+f.typo_count,0);
+    const sec=document.createElement('div'); sec.style.marginBottom='1.5rem';
+    sec.innerHTML=`<div class="flex items-center gap-2" style="margin-bottom:.75rem">
+      <span class="bold" style="font-size:.9375rem">${pt.label}</span>
+      <span class="text-sm text-gray">${pt.files.length}개 파일</span>
+      ${tot>0?`<span class="text-xs" style="background:#f3f4f6;color:#4b5563;padding:.125rem .5rem;border-radius:9999px;font-weight:500">총 ${tot}건 검출</span>`:''}
+    </div>`;
+    pt.files.forEach(f=>{
+      const sups=f.results.filter(r=>r.category==='superlative');
+      const typs=f.results.filter(r=>r.category==='typo');
+      let bHtml='';
+      if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.75rem 1.25rem"><p class="text-sm" style="color:#92400e"><strong>파싱 오류:</strong> ${esc(f.parse_error)}</p></div>`;
+      if(!f.results.length&&!f.parse_error) bHtml+=`<div class="text-center text-sm text-gray" style="padding:2rem">검출된 항목 없음</div>`;
+      if(sups.length){
+        bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">최상급 표현 (${sups.length}건)</span></div>`;
+        sups.forEach((r,i)=>bHtml+=`<div class="result-item sup" ${i<sups.length-1?'style="border-bottom:1px solid rgba(251,191,36,.12)"':''}>
+          <span class="pg-badge" style="color:#d97706">[${r.page_number}p]</span>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
+          <span style="font-size:.75rem;font-weight:500;color:#b45309;background:#fef3c7;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">검토 필요</span></div>
+        </div>`);
+      }
+      if(typs.length){
+        bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">오타 (${typs.length}건)</span></div>`;
+        typs.forEach((r,i)=>bHtml+=`<div class="result-item typ" ${i<typs.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
+          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
+          ${r.suggestion?`<p class="text-xs mt-1" style="color:#dc2626">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
+          </div>
+        </div>`);
+      }
+      const fc=document.createElement('div'); fc.className='result-file';
+      fc.innerHTML=`<div class="result-file-hdr" onclick="toggleCard(this)">
+        <div class="flex items-center gap-2" style="min-width:0">
+          <span class="bold truncate" style="font-size:.9375rem">${esc(f.original_filename)}</span>
+          ${f.total_pages!=null?`<span class="text-xs text-gray" style="flex-shrink:0">${f.total_pages}p</span>`:''}
+        </div>
+        <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:1rem">
+          ${f.superlative_count>0?`<span class="text-xs" style="background:#fffbeb;color:#b45309;padding:.125rem .5rem;border-radius:9999px;font-weight:500">최상급 ${f.superlative_count}건</span>`:''}
+          ${f.typo_count>0?`<span class="text-xs" style="background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:500">오타 ${f.typo_count}건</span>`:''}
+          <svg class="chevron open" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
+      <div style="border-top:1px solid #f3f4f6">${bHtml}</div>`;
+      sec.appendChild(fc);
+    });
+    body.appendChild(sec);
+  });
+  if(!data.proposal_types.length) body.innerHTML='<div class="text-center text-gray" style="padding:4rem">검토된 파일이 없습니다.</div>';
+}
+
+function toggleCard(hdr){
+  const body=hdr.nextElementSibling, chev=hdr.querySelector('.chevron');
+  const open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  chev.classList.toggle('open',!open);
+}
+
+/* ── 키보드 단축키 ─────────────────────────────────────── */
+['l-user','l-pass'].forEach(id=>$(id)?.addEventListener('keydown',e=>e.key==='Enter'&&doLogin()));
+$('r-conf')?.addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
+
+/* ── 서버 주소 필드 초기화 ──────────────────────────────── */
+function updateApiHint(){
+  const inp=$('l-api'), hint=$('l-api-hint');
+  if(!inp||!hint) return;
+  const v=inp.value.trim()||API;
+  const blocked=location.protocol==='https:'&&(v.startsWith('http://localhost')||v.startsWith('http://127.'));
+  hint.style.color=blocked?'#dc2626':'#64748b';
+  hint.textContent=blocked
+    ?'HTTPS 페이지에서는 http://localhost 접속이 차단됩니다. ngrok 등 HTTPS 터널 주소를 입력하세요.'
+    :'FastAPI 백엔드 주소 (예: http://localhost:8000)';
+}
+$('l-api')?.addEventListener('input', updateApiHint);
+
+/* ── 초기화 ───────────────────────────────────────────── */
+if(tk()){
+  api('/api/auth/me').then(d=>{ if(d?.username)localStorage.setItem('username',d.username); show('dashboard'); }).catch(()=>show('login'));
+}
+</script>
+</body>
+</html>
