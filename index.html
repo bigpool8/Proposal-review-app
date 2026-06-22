@@ -525,11 +525,22 @@ async function downloadPdf(){
   btn.disabled=true; btn.textContent='PDF 생성 중...';
   try {
     const html='<div style="width:186mm;box-sizing:border-box;font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif">'+buildPdfHtml(resultData)+'</div>';
+
+    // 콘텐츠 실제 높이 측정 → 페이지 분리 없는 단일 페이지 PDF
+    const probe=document.createElement('div');
+    probe.style.cssText='position:absolute;top:0;left:-9999px;width:186mm;visibility:hidden';
+    probe.innerHTML=html;
+    document.body.appendChild(probe);
+    await new Promise(r=>setTimeout(r,80));
+    const hPx=probe.scrollHeight;
+    document.body.removeChild(probe);
+    const pdfH=Math.ceil(hPx*25.4/96)+24; // px→mm + 상하 마진
+
     await html2pdf().set({
       margin:[12,12,12,12],
       filename:'제안서검토결과.pdf',
       html2canvas:{scale:2,useCORS:true,logging:false},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
+      jsPDF:{unit:'mm',format:[210,pdfH],orientation:'portrait'}
     }).from(html,'string').save();
   } catch(e){ toast('PDF 다운로드에 실패했습니다.','error'); }
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
