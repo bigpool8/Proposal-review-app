@@ -213,13 +213,21 @@ def delete_file(
 
 
 # ── 검토 건 삭제 ─────────────────────────────────────────
-@router.post("/{job_id}/delete", status_code=204)
+@router.post("/{job_id}/delete")
 def delete_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
     sb: Client = Depends(get_supabase),
 ):
-    job = _get_job(job_id, current_user["id"], sb, with_files=True)
+    # 존재 여부 확인 (없으면 이미 삭제된 것으로 간주 — 멱등성)
+    res = sb.table("proposal_review").select("id, user_id, review_files(storage_path)").eq("id", job_id).execute()
+    if not res.data:
+        return {"deleted": True, "job_id": job_id}
+
+    job = res.data[0]
+    if job["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
     files = job.get("review_files") or []
 
     # 로컬 파일 정리 (Railway 임시 파일시스템 — 실패해도 무시)
@@ -235,7 +243,12 @@ def delete_job(
             pass
 
     # proposal_review 삭제 → CASCADE로 review_files, review_results 자동 삭제
-    sb.table("proposal_review").delete().eq("id", job_id).execute()
+    try:
+        sb.table("proposal_review").delete().eq("id", job_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"삭제 중 오류: {str(exc)[:200]}")
+
+    return {"deleted": True, "job_id": job_id}
 
 
 # ── 검토 시작 ─────────────────────────────────────────────

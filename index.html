@@ -392,7 +392,7 @@ async function deleteSelected(){
   try {
     await Promise.all([...sel].map(id=>api('/api/jobs/'+id+'/delete',{method:'POST'})));
     toast(sel.size+'건이 삭제되었습니다.','success'); sel.clear(); loadDashboard();
-  } catch(e){ toast('삭제에 실패했습니다.','error'); }
+  } catch(e){ toast(e.message||'삭제에 실패했습니다.','error'); }
   finally { updateDel(); }
 }
 
