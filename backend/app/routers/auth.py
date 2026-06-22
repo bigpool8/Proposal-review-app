@@ -12,7 +12,7 @@ from app.core.security import (
     verify_password,
 )
 from app.database import get_supabase
-from app.schemas.user import Token, UserCreate, UserResponse
+from app.schemas.user import ChangePasswordRequest, Token, UserCreate, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -67,3 +67,19 @@ def get_current_user(
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(id=current_user["id"], username=current_user["username"])
+
+
+@router.post("/change-password")
+def change_password(body: ChangePasswordRequest, sb: Client = Depends(get_supabase)):
+    res = sb.table("users").select("id, password_hash").eq("username", body.username).execute()
+    if not res.data:
+        raise HTTPException(status_code=401, detail="아이디 또는 현재 비밀번호가 올바르지 않습니다.")
+    user = res.data[0]
+    if not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="아이디 또는 현재 비밀번호가 올바르지 않습니다.")
+    if not validate_password(body.new_password):
+        raise HTTPException(status_code=422, detail="새 비밀번호는 영문과 숫자를 포함하여 6자 이상이어야 합니다.")
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=422, detail="새 비밀번호는 현재 비밀번호와 달라야 합니다.")
+    sb.table("users").update({"password_hash": get_password_hash(body.new_password)}).eq("id", user["id"]).execute()
+    return {"message": "비밀번호가 변경되었습니다."}

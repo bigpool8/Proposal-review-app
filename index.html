@@ -90,7 +90,27 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
         <input type="text" id="l-api" placeholder="https://your-server.com" autocomplete="off" style="font-size:.875rem;padding:.5rem .75rem">
         <p class="text-xs mt-1" id="l-api-hint" style="color:#64748b"></p>
       </div>
-      <p class="text-center text-sm text-gray mt-4">계정이 없으신가요? <span class="link" onclick="show('register')">회원가입</span></p>
+      <p class="text-center text-sm text-gray mt-4">계정이 없으신가요? <span class="link" onclick="show('register')">회원가입</span> · <span class="link" onclick="show('change-password')">비밀번호 변경</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 비밀번호 변경 ──────────────────────────────────────── -->
+<div id="page-change-password" class="page">
+  <div class="auth-wrap">
+    <h1 class="auth-title">AI 제안서 검증 시스템</h1>
+    <div class="auth-box">
+      <p style="font-size:1.5rem;font-weight:700;margin-bottom:2rem">비밀번호 변경</p>
+      <div class="form-group"><label>아이디</label><input type="text" id="cp-user" autocomplete="username"></div>
+      <div class="form-group"><label>현재 비밀번호</label><input type="password" id="cp-cur" autocomplete="current-password"></div>
+      <div class="form-group">
+        <label>새 비밀번호</label><input type="password" id="cp-new" autocomplete="new-password">
+        <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+      </div>
+      <div class="form-group"><label>새 비밀번호 확인</label><input type="password" id="cp-conf" autocomplete="new-password"></div>
+      <div id="cp-err" class="error-msg" style="display:none"></div>
+      <button class="btn btn-primary btn-full mt-4" id="cp-btn" onclick="doChangePassword()">비밀번호 변경</button>
+      <p class="text-center text-sm text-gray mt-4"><span class="link" onclick="show('login')">로그인으로 돌아가기</span></p>
     </div>
   </div>
 </div>
@@ -334,6 +354,23 @@ async function doRegister() {
     show('login');
   } catch(e){ err.textContent=e.message||'회원가입에 실패했습니다.'; err.style.display='block'; }
   finally { setBtn('r-btn',false,'회원가입','처리 중...'); }
+}
+
+async function doChangePassword() {
+  const u=$('cp-user').value.trim(), cur=$('cp-cur').value, nw=$('cp-new').value, conf=$('cp-conf').value, err=$('cp-err');
+  err.style.display='none';
+  if(!u){ err.textContent='아이디를 입력하세요.'; err.style.display='block'; return; }
+  if(!cur){ err.textContent='현재 비밀번호를 입력하세요.'; err.style.display='block'; return; }
+  if(nw.length<6||!/[A-Za-z]/.test(nw)||!/\d/.test(nw)){ err.textContent='새 비밀번호는 영문+숫자 포함 6자 이상이어야 합니다.'; err.style.display='block'; return; }
+  if(nw!==conf){ err.textContent='새 비밀번호가 일치하지 않습니다.'; err.style.display='block'; return; }
+  setBtn('cp-btn',true,'비밀번호 변경','처리 중...');
+  try {
+    await api('/api/auth/change-password',{method:'POST',body:JSON.stringify({username:u,current_password:cur,new_password:nw})});
+    toast('비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.','success');
+    $('cp-user').value=''; $('cp-cur').value=''; $('cp-new').value=''; $('cp-conf').value='';
+    show('login');
+  } catch(e){ err.textContent=e.message||'비밀번호 변경에 실패했습니다.'; err.style.display='block'; }
+  finally { setBtn('cp-btn',false,'비밀번호 변경','처리 중...'); }
 }
 
 function doLogout() {

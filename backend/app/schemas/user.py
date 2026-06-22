@@ -27,3 +27,9 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class ChangePasswordRequest(BaseModel):
+    username: str
+    current_password: str
+    new_password: str
