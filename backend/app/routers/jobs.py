@@ -1,8 +1,12 @@
+import io
 import os
+import urllib.parse
 import uuid
+from datetime import datetime as _dt
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from supabase import Client
 
 from app.database import get_supabase
@@ -331,6 +335,173 @@ def get_job_results(
         },
         "proposal_types": proposal_types,
     }
+
+
+# ── Word 다운로드 ──────────────────────────────────────────
+def _build_word_doc(job: dict) -> io.BytesIO:
+    from docx import Document
+    from docx.shared import Cm, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for sec in doc.sections:
+        sec.top_margin = Cm(2.5)
+        sec.bottom_margin = Cm(2.5)
+        sec.left_margin = Cm(2.5)
+        sec.right_margin = Cm(2.5)
+
+    # 제목
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run("제안서 검토 결과")
+    r.font.size = Pt(22)
+    r.font.bold = True
+    r.font.color.rgb = RGBColor(0x4F, 0x46, 0xE5)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    r = p.add_run(_dt.now().strftime("검토 일시: %Y년 %m월 %d일"))
+    r.font.size = Pt(10)
+    r.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+    doc.add_paragraph()
+
+    # 요약
+    files = job.get("review_files") or []
+    total_sup = total_typo = files_with_issues = 0
+    for f in files:
+        results = f.get("review_results") or []
+        sup = sum(1 for x in results if x["category"] == "superlative")
+        typo = sum(1 for x in results if x["category"] == "typo")
+        total_sup += sup
+        total_typo += typo
+        if results:
+            files_with_issues += 1
+
+    p = doc.add_paragraph()
+    p.add_run("[ 검토 요약 ]").font.bold = True
+
+    tbl = doc.add_table(rows=4, cols=2)
+    tbl.style = "Table Grid"
+    for idx, (k, v) in enumerate([
+        ("구분", "건수"),
+        ("최상급 표현", f"{total_sup}건"),
+        ("오타", f"{total_typo}건"),
+        ("이슈 파일", f"{files_with_issues}개"),
+    ]):
+        for ci, txt in enumerate((k, v)):
+            cell = tbl.rows[idx].cells[ci]
+            cell.paragraphs[0].clear()
+            run = cell.paragraphs[0].add_run(txt)
+            run.font.size = Pt(10)
+            if idx == 0:
+                run.font.bold = True
+    tbl.columns[0].width = Cm(5)
+    tbl.columns[1].width = Cm(3)
+
+    doc.add_paragraph()
+
+    # 제안서 유형별
+    files_by_type: dict[str, list] = {}
+    for f in files:
+        files_by_type.setdefault(f["proposal_type"], []).append(f)
+
+    for ptype in _PROPOSAL_ORDER:
+        if ptype not in files_by_type:
+            continue
+
+        p = doc.add_paragraph()
+        r = p.add_run(f"■ {_PROPOSAL_LABELS[ptype]}")
+        r.font.bold = True
+        r.font.size = Pt(13)
+        r.font.color.rgb = RGBColor(0x4F, 0x46, 0xE5)
+
+        for f in files_by_type[ptype]:
+            results = f.get("review_results") or []
+            sups = [x for x in results if x["category"] == "superlative"]
+            typs = [x for x in results if x["category"] == "typo"]
+
+            p = doc.add_paragraph()
+            r = p.add_run(f"▶ {f['original_filename']}")
+            r.font.bold = True
+            r.font.size = Pt(11)
+            if f.get("total_pages"):
+                r2 = p.add_run(f"  ({f['total_pages']}페이지)")
+                r2.font.size = Pt(9)
+                r2.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+            if f.get("parse_error"):
+                r = doc.add_paragraph().add_run(f"⚠ 파싱 오류: {f['parse_error']}")
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+                doc.add_paragraph()
+                continue
+
+            if not results:
+                r = doc.add_paragraph().add_run("검출된 항목 없음")
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+                doc.add_paragraph()
+                continue
+
+            def _add_result_table(items: list, col3_header: str, col3_key: str | None):
+                tbl = doc.add_table(rows=len(items) + 1, cols=3)
+                tbl.style = "Table Grid"
+                for ci, h in enumerate(["페이지", "검출 내용", col3_header]):
+                    cell = tbl.rows[0].cells[ci]
+                    cell.paragraphs[0].clear()
+                    rr = cell.paragraphs[0].add_run(h)
+                    rr.font.bold = True
+                    rr.font.size = Pt(9)
+                for ri, item in enumerate(items):
+                    row = tbl.rows[ri + 1]
+                    ctx = (item.get("context") or item.get("detected_text") or "")[:300]
+                    col3_val = item.get(col3_key, "") if col3_key else "검토 필요"
+                    for ci, txt in enumerate([f"{item['page_number']}p", ctx, col3_val or ""]):
+                        cell = row.cells[ci]
+                        cell.paragraphs[0].clear()
+                        cell.paragraphs[0].add_run(txt).font.size = Pt(9)
+                tbl.columns[0].width = Cm(2)
+                tbl.columns[1].width = Cm(10)
+                tbl.columns[2].width = Cm(3)
+                doc.add_paragraph()
+
+            if sups:
+                r = doc.add_paragraph().add_run(f"  최상급 표현 ({len(sups)}건)")
+                r.font.bold = True
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
+                _add_result_table(sups, "비고", None)
+
+            if typs:
+                r = doc.add_paragraph().add_run(f"  오타 ({len(typs)}건)")
+                r.font.bold = True
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+                _add_result_table(typs, "수정 제안", "suggestion")
+
+        doc.add_paragraph()
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@router.get("/{job_id}/download/word")
+def download_word(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+    sb: Client = Depends(get_supabase),
+):
+    job = _get_job(job_id, current_user["id"], sb, with_results=True)
+    buf = _build_word_doc(job)
+    filename = urllib.parse.quote(f"제안서검토결과_{job_id[:8]}.docx")
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
 
 
 # ── 검토 재시도 ────────────────────────────────────────────

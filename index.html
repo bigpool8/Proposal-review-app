@@ -176,6 +176,9 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
   <div id="res-failed" style="display:none"></div>
   <div id="res-content" style="display:none">
     <div class="main">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+        <button class="btn btn-outline btn-sm" id="dl-word-btn" onclick="downloadWord()">⬇ Word 다운로드</button>
+      </div>
       <div class="summary-grid" id="res-summary"></div>
       <div id="res-body"></div>
     </div>
@@ -496,6 +499,22 @@ async function poll(){
 async function doRetry(){
   try { await api('/api/jobs/'+jobId+'/retry',{method:'POST'}); openResults(jobId); }
   catch(e){ toast(e.message,'error'); }
+}
+
+async function downloadWord(){
+  const btn=$('dl-word-btn');
+  btn.disabled=true; btn.textContent='다운로드 중...';
+  try {
+    const r=await fetch(API+'/api/jobs/'+jobId+'/download/word',{headers:{'Authorization':'Bearer '+tk()}});
+    if(!r.ok) throw new Error('다운로드 실패');
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='제안서검토결과.docx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e){ toast('Word 다운로드에 실패했습니다.','error'); }
+  finally { btn.disabled=false; btn.textContent='⬇ Word 다운로드'; }
 }
 
 function hlCtx(ctx,det){
