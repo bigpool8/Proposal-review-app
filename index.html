@@ -524,18 +524,14 @@ async function downloadPdf(){
   const btn=$('dl-pdf-btn');
   btn.disabled=true; btn.textContent='PDF 생성 중...';
   try {
-    const el=document.createElement('div');
-    el.style.cssText='position:fixed;left:-9999px;top:0;width:190mm;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
-    el.innerHTML=buildPdfHtml(resultData);
-    document.body.appendChild(el);
+    const html='<div style="font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif">'+buildPdfHtml(resultData)+'</div>';
     await html2pdf().set({
       margin:[12,12,12,12],
       filename:'제안서검토결과.pdf',
-      html2canvas:{scale:2,useCORS:true,logging:false},
+      html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:794},
       jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-      pagebreak:{mode:['avoid-all','css']}
-    }).from(el).save();
-    document.body.removeChild(el);
+      pagebreak:{mode:'css',before:'.page-break'}
+    }).from(html,'string').save();
   } catch(e){ toast('PDF 다운로드에 실패했습니다.','error'); }
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
 }
