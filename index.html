@@ -529,8 +529,7 @@ async function downloadPdf(){
       margin:[12,12,12,12],
       filename:'제안서검토결과.pdf',
       html2canvas:{scale:2,useCORS:true,logging:false},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-      pagebreak:{mode:'css'}
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
     }).from(html,'string').save();
   } catch(e){ toast('PDF 다운로드에 실패했습니다.','error'); }
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
@@ -562,8 +561,8 @@ function buildPdfHtml(data){
       <tr><td style="${cs}">이슈 파일</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${s.files_with_issues}개</td></tr>
     </table>`;
 
-  data.proposal_types.forEach(pt=>{
-    h+=`<h2 style="font-size:13px;font-weight:700;color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:3px;margin:0 0 10px;page-break-before:always">■ ${pt.label}</h2>`;
+  data.proposal_types.forEach((pt,pi)=>{
+    h+=`<h2 style="font-size:13px;font-weight:700;color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:3px;margin:${pi===0?'0':'16px'} 0 10px">■ ${pt.label}</h2>`;
     pt.files.forEach(f=>{
       h+=`<h3 style="font-size:11px;font-weight:700;margin:0 0 5px">▶ ${esc(f.original_filename)}${f.total_pages?` <span style="color:#6b7280;font-weight:400">(${f.total_pages}페이지)</span>`:''}</h3>`;
       if(f.parse_error){
