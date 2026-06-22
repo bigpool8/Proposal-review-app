@@ -19,16 +19,31 @@ _MIME_EXT = {
 
 def _parse_pptx(file_path: str) -> tuple[list[dict], Optional[str]]:
     from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    def _extract_shape_texts(shape) -> list[str]:
+        texts = []
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            for s in shape.shapes:
+                texts.extend(_extract_shape_texts(s))
+        elif shape.shape_type == MSO_SHAPE_TYPE.TABLE:
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    for para in cell.text_frame.paragraphs:
+                        if para.text:
+                            texts.append(para.text)
+        elif shape.has_text_frame:
+            for para in shape.text_frame.paragraphs:
+                if para.text:
+                    texts.append(para.text)
+        return texts
 
     prs = Presentation(file_path)
     pages = []
     for idx, slide in enumerate(prs.slides, start=1):
         texts = []
         for shape in slide.shapes:
-            if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    if para.text:
-                        texts.append(para.text)
+            texts.extend(_extract_shape_texts(shape))
         pages.append({"page_number": idx, "text": "\n".join(texts)})
     return pages, None
 
