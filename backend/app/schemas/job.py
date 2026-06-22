@@ -30,6 +30,7 @@ class JobResponse(BaseModel):
     file_counts: FileCounts = FileCounts()
     superlative_count: int = 0
     typo_count: int = 0
+    blind_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -38,3 +39,8 @@ class FileUploadResponse(BaseModel):
     file_id: str
     original_filename: str
     proposal_type: str
+
+
+class StartJobRequest(BaseModel):
+    blind_eval: bool = False
+    blind_keywords: List[dict] = []

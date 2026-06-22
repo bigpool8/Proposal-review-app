@@ -11,7 +11,7 @@ from supabase import Client
 
 from app.database import get_supabase
 from app.routers.auth import get_current_user
-from app.schemas.job import FileCounts, FileResponse, FileUploadResponse, JobResponse
+from app.schemas.job import FileCounts, FileResponse, FileUploadResponse, JobResponse, StartJobRequest
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -29,7 +29,7 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
         quantitative=sum(1 for f in files if f["proposal_type"] == "quantitative"),
         presentation=sum(1 for f in files if f["proposal_type"] == "presentation"),
     )
-    sup = typo = 0
+    sup = typo = blind = 0
     if with_results:
         for f in files:
             for r in (f.get("review_results") or []):
@@ -37,6 +37,8 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
                     sup += 1
                 elif r["category"] == "typo":
                     typo += 1
+                elif r["category"] == "blind":
+                    blind += 1
     return JobResponse(
         id=job["id"],
         status=job["status"],
@@ -56,6 +58,7 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
         file_counts=counts,
         superlative_count=sup,
         typo_count=typo,
+        blind_count=blind,
     )
 
 
@@ -240,6 +243,7 @@ def delete_job(
 def start_job(
     job_id: str,
     background_tasks: BackgroundTasks,
+    req: StartJobRequest,
     current_user: dict = Depends(get_current_user),
     sb: Client = Depends(get_supabase),
 ):
@@ -252,7 +256,11 @@ def start_job(
     if not files:
         raise HTTPException(status_code=400, detail="파일을 먼저 업로드하세요.")
 
-    sb.table("proposal_review").update({"status": "pending"}).eq("id", job_id).execute()
+    sb.table("proposal_review").update({
+        "status": "pending",
+        "blind_eval": req.blind_eval,
+        "blind_keywords": req.blind_keywords,
+    }).eq("id", job_id).execute()
     background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}
 
@@ -281,6 +289,7 @@ def get_job_results(
 
     total_superlative = 0
     total_typo = 0
+    total_blind = 0
     files_with_issues = 0
     proposal_types = []
 
@@ -295,9 +304,11 @@ def get_job_results(
             )
             sup = sum(1 for r in items if r["category"] == "superlative")
             typo = sum(1 for r in items if r["category"] == "typo")
+            blind = sum(1 for r in items if r["category"] == "blind")
             total_superlative += sup
             total_typo += typo
-            if sup + typo > 0:
+            total_blind += blind
+            if sup + typo + blind > 0:
                 files_with_issues += 1
             file_results.append({
                 "file_id": f["id"],
@@ -306,6 +317,7 @@ def get_job_results(
                 "parse_error": f.get("parse_error"),
                 "superlative_count": sup,
                 "typo_count": typo,
+                "blind_count": blind,
                 "results": [
                     {
                         "id": r["id"],
@@ -328,9 +340,12 @@ def get_job_results(
         "job_id": job_id,
         "status": job["status"],
         "error_message": job.get("error_message"),
+        "blind_eval": job.get("blind_eval", False),
+        "blind_keywords": job.get("blind_keywords") or [],
         "summary": {
             "total_superlative": total_superlative,
             "total_typo": total_typo,
+            "total_blind": total_blind,
             "files_with_issues": files_with_issues,
         },
         "proposal_types": proposal_types,
@@ -368,27 +383,34 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
     # 요약
     files = job.get("review_files") or []
-    total_sup = total_typo = files_with_issues = 0
+    blind_eval = job.get("blind_eval", False)
+    total_sup = total_typo = total_blind = files_with_issues = 0
     for f in files:
         results = f.get("review_results") or []
         sup = sum(1 for x in results if x["category"] == "superlative")
         typo = sum(1 for x in results if x["category"] == "typo")
+        bl = sum(1 for x in results if x["category"] == "blind")
         total_sup += sup
         total_typo += typo
+        total_blind += bl
         if results:
             files_with_issues += 1
 
     p = doc.add_paragraph()
     p.add_run("[ 검토 요약 ]").font.bold = True
 
-    tbl = doc.add_table(rows=4, cols=2)
-    tbl.style = "Table Grid"
-    for idx, (k, v) in enumerate([
+    summary_rows = [
         ("구분", "건수"),
         ("최상급 표현", f"{total_sup}건"),
         ("오타", f"{total_typo}건"),
-        ("이슈 파일", f"{files_with_issues}개"),
-    ]):
+    ]
+    if blind_eval:
+        summary_rows.append(("블라인드 평가", f"{total_blind}건"))
+    summary_rows.append(("이슈 파일", f"{files_with_issues}개"))
+
+    tbl = doc.add_table(rows=len(summary_rows), cols=2)
+    tbl.style = "Table Grid"
+    for idx, (k, v) in enumerate(summary_rows):
         for ci, txt in enumerate((k, v)):
             cell = tbl.rows[idx].cells[ci]
             cell.paragraphs[0].clear()
@@ -420,6 +442,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             results = f.get("review_results") or []
             sups = [x for x in results if x["category"] == "superlative"]
             typs = [x for x in results if x["category"] == "typo"]
+            blds = [x for x in results if x["category"] == "blind"]
 
             p = doc.add_paragraph()
             r = p.add_run(f"▶ {f['original_filename']}")
@@ -444,7 +467,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 doc.add_paragraph()
                 continue
 
-            def _add_result_table(items: list, col3_header: str, col3_key: str | None):
+            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요"):
                 tbl = doc.add_table(rows=len(items) + 1, cols=3)
                 tbl.style = "Table Grid"
                 for ci, h in enumerate(["페이지", "검출 내용", col3_header]):
@@ -457,7 +480,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     row = tbl.rows[ri + 1]
                     ctx = (item.get("context") or item.get("detected_text") or "")[:300]
                     detected = item.get("detected_text") or ""
-                    col3_val = item.get(col3_key, "") if col3_key else "검토 필요"
+                    col3_val = item.get(col3_key, "") if col3_key else default_col3
 
                     # 페이지 번호 셀
                     c0 = row.cells[0]; c0.paragraphs[0].clear()
@@ -499,6 +522,13 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
                 _add_result_table(typs, "수정 제안", "suggestion")
+
+            if blds:
+                r = doc.add_paragraph().add_run(f"  블라인드 평가 ({len(blds)}건)")
+                r.font.bold = True
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
+                _add_result_table(blds, "비고", None, "식별 정보")
 
         doc.add_paragraph()
 
