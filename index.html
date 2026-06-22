@@ -681,7 +681,7 @@ function buildPdfHtml(data){
         h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 (${blds.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">식별 정보</td></tr>`; });
+        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
         h+=`</table>`;
       }
     });
@@ -749,7 +749,7 @@ function renderResults(data){
         blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">식별 정보 검출</span></div>
+          <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
         </div>`);
       }
       const fc=document.createElement('div'); fc.className='result-file';
