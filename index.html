@@ -525,8 +525,19 @@ function renderBlindKeywords(){
 async function doStart(){
   setBtn('modal-start-btn',true,'시작','처리 중...');
   try {
-    const kws=blindKeywords.filter(k=>k.value.trim()).map(k=>({type:k.type,value:k.value.trim()}));
-    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:blindEval,blind_keywords:kws})});
+    // 전역 변수 대신 DOM 상태를 직접 읽어 동기화 문제 방지
+    const chk=$('blind-eval-chk');
+    const isBlind=chk?chk.checked:false;
+    const kws=[];
+    if(isBlind){
+      const list=$('blind-keyword-list');
+      if(list) list.querySelectorAll('div').forEach(row=>{
+        const sel=row.querySelector('select');
+        const inp=row.querySelector('input[type=text]');
+        if(inp){const v=inp.value.trim(); if(v) kws.push({type:sel?sel.value:'회사명',value:v});}
+      });
+    }
+    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws})});
     hideModal(); openResults(jobId);
   }
   catch(e){ toast(e.message,'error'); }
