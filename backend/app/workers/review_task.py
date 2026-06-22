@@ -15,8 +15,8 @@ def _get_sb():
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
 
 
-_SYSTEM_BASE = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
-주어진 텍스트에서 아래 항목을 검출해야 합니다.
+SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
+주어진 텍스트에서 두 가지 항목을 검출해야 합니다.
 
 1. 최상급 표현: 허위사실로 오인될 수 있는 표현
    - 해당 표현: 최초, 최대, 최고, 최선, 유일, 독보적, 가장, 압도적, 세계 최
@@ -26,49 +26,21 @@ _SYSTEM_BASE = """당신은 컨설팅 제안서를 검토하는 전문 편집자
 
 2. 오타: 한글 또는 영문 맞춤법/철자 오류
    - 전문 용어, 고유명사, 브랜드명, 약어는 오타로 처리하지 말 것
-   - 수정 제안은 1개만 제시"""
-
-
-def _build_system_prompt(blind_eval: bool = False, blind_keywords: list = None) -> str:
-    prompt = _SYSTEM_BASE
-
-    if blind_eval and blind_keywords:
-        kw_lines = [
-            f'   - {kw.get("type", "기타")}: "{kw.get("value", "").strip()}"'
-            for kw in blind_keywords
-            if kw.get("value", "").strip()
-        ]
-        if kw_lines:
-            prompt += "\n\n3. 블라인드 평가: 회사 식별 정보 검출\n"
-            prompt += "   다음 회사 식별 정보가 제안서 텍스트에 포함되어 있으면 반드시 검출할 것:\n"
-            prompt += "\n".join(kw_lines)
-            prompt += '\n   - 위 식별 정보가 발견되면 category: "blind", suggestion: null 로 반환'
-            prompt += "\n   - 회사 식별 정보는 오타 검사 대상에서 제외할 것"
-
-    has_blind = (
-        blind_eval
-        and blind_keywords
-        and any(kw.get("value", "").strip() for kw in blind_keywords)
-    )
-    categories = '"superlative" | "typo" | "blind"' if has_blind else '"superlative" | "typo"'
-
-    prompt += f"""
+   - 수정 제안은 1개만 제시
 
 출력 형식은 반드시 아래 JSON 형식을 따르세요. JSON 외 다른 텍스트는 출력하지 마세요:
-{{
+{
   "results": [
-    {{
-      "category": {categories},
+    {
+      "category": "superlative" | "typo",
       "detected_text": "검출된 텍스트",
-      "suggestion": "수정 제안 (오타일 때만, 나머지는 null)",
+      "suggestion": "수정 제안 (오타일 때만, 최상급은 null)",
       "page_number": 페이지번호(정수),
       "context": "검출된 텍스트를 포함한 전후 1~2문장"
-    }}
+    }
   ]
-}}
-결과가 없으면 {{"results": []}} 반환."""
-
-    return prompt
+}
+결과가 없으면 {"results": []} 반환."""
 
 
 def _build_user_prompt(filename: str, pages: list[dict]) -> str:
@@ -82,11 +54,11 @@ def _build_user_prompt(filename: str, pages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _call_llm(client: Anthropic, system_prompt: str, filename: str, pages: list[dict]) -> list[dict]:
+def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]:
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4096,
-        system=system_prompt,
+        system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": _build_user_prompt(filename, pages)}],
     )
     raw = response.content[0].text.strip()
@@ -100,7 +72,45 @@ def _call_llm(client: Anthropic, system_prompt: str, filename: str, pages: list[
         return []
 
 
-def _process_file(sb, client: Anthropic, review_file: dict, system_prompt: str) -> None:
+def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
+    """입력된 회사 식별 키워드를 텍스트에서 직접 검색해 모두 저장."""
+    for page in pages:
+        text = page.get("text") or ""
+        if not text:
+            continue
+        text_lower = text.lower()
+        page_num = page["page_number"]
+        recorded = set()  # 같은 페이지에서 동일 키워드 중복 방지
+
+        for kw in blind_keywords:
+            value = kw.get("value", "").strip()
+            if not value:
+                continue
+            key = value.lower()
+            if key in recorded:
+                continue
+
+            idx = text_lower.find(key)
+            if idx == -1:
+                continue
+
+            recorded.add(key)
+            ctx_start = max(0, idx - 80)
+            ctx_end = min(len(text), idx + len(value) + 80)
+            context = text[ctx_start:ctx_end].strip()
+
+            sb.table("review_results").insert({
+                "id": str(uuid.uuid4()),
+                "file_id": review_file["id"],
+                "category": "blind",
+                "detected_text": value,
+                "suggestion": None,
+                "page_number": page_num,
+                "context": context,
+            }).execute()
+
+
+def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list) -> None:
     parsed = parse_file(
         review_file["storage_path"],
         review_file["mime_type"],
@@ -118,9 +128,11 @@ def _process_file(sb, client: Anthropic, review_file: dict, system_prompt: str) 
         return
 
     pages = parsed["pages"]
+
+    # LLM 기반 검출 (최상급 표현 + 오타)
     for i in range(0, len(pages), CHUNK_SIZE):
         chunk = pages[i : i + CHUNK_SIZE]
-        items = _call_llm(client, system_prompt, review_file["original_filename"], chunk)
+        items = _call_llm(client, review_file["original_filename"], chunk)
         for item in items:
             sb.table("review_results").insert({
                 "id": str(uuid.uuid4()),
@@ -131,6 +143,10 @@ def _process_file(sb, client: Anthropic, review_file: dict, system_prompt: str) 
                 "page_number": int(item.get("page_number", 0)),
                 "context": item.get("context"),
             }).execute()
+
+    # 블라인드 평가: 직접 문자열 검색 (모든 키워드, 모든 페이지)
+    if blind_keywords:
+        _search_blind_keywords(sb, review_file, blind_keywords, pages)
 
 
 def run_review_sync(job_id: str) -> None:
@@ -144,16 +160,18 @@ def run_review_sync(job_id: str) -> None:
         job_res = sb.table("proposal_review").select("blind_eval,blind_keywords").eq("id", job_id).execute()
         job_data = job_res.data[0] if job_res.data else {}
         blind_eval = job_data.get("blind_eval", False)
-        blind_keywords = job_data.get("blind_keywords") or []
-
-        system_prompt = _build_system_prompt(blind_eval, blind_keywords)
+        raw_keywords = job_data.get("blind_keywords") or []
+        blind_keywords = (
+            [kw for kw in raw_keywords if kw.get("value", "").strip()]
+            if blind_eval else []
+        )
 
         files_res = sb.table("review_files").select("*").eq("job_id", job_id).execute()
         files = files_res.data or []
 
         client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         for review_file in files:
-            _process_file(sb, client, review_file, system_prompt)
+            _process_file(sb, client, review_file, blind_keywords)
 
         sb.table("proposal_review").update({
             "status": "completed",
