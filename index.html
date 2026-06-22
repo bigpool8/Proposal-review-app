@@ -536,6 +536,14 @@ async function downloadPdf(){
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
 }
 
+function boldCtx(ctx, det){
+  const full=(ctx||det||'').substring(0,300);
+  if(!det||!ctx) return esc(full);
+  const i=full.toLowerCase().indexOf(det.toLowerCase());
+  if(i===-1) return esc(full);
+  return esc(full.slice(0,i))+'<strong>'+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
+}
+
 function buildPdfHtml(data){
   const s=data.summary;
   const now=new Date();
@@ -573,14 +581,14 @@ function buildPdfHtml(data){
         h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">최상급 표현 (${sups.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${esc((r.context||r.detected_text||'').substring(0,200))}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
+        sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
         h+=`</table>`;
       }
       if(typs.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">오타 (${typs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:100px">수정 제안</td></tr>`;
-        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${esc((r.context||r.detected_text||'').substring(0,200))}</td><td style="${cs};color:#dc2626">${esc(r.suggestion||'')}</td></tr>`; });
+        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};color:#dc2626">${esc(r.suggestion||'')}</td></tr>`; });
         h+=`</table>`;
       }
     });

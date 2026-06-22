@@ -456,11 +456,31 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 for ri, item in enumerate(items):
                     row = tbl.rows[ri + 1]
                     ctx = (item.get("context") or item.get("detected_text") or "")[:300]
+                    detected = item.get("detected_text") or ""
                     col3_val = item.get(col3_key, "") if col3_key else "검토 필요"
-                    for ci, txt in enumerate([f"{item['page_number']}p", ctx, col3_val or ""]):
-                        cell = row.cells[ci]
-                        cell.paragraphs[0].clear()
-                        cell.paragraphs[0].add_run(txt).font.size = Pt(9)
+
+                    # 페이지 번호 셀
+                    c0 = row.cells[0]; c0.paragraphs[0].clear()
+                    c0.paragraphs[0].add_run(f"{item['page_number']}p").font.size = Pt(9)
+
+                    # 검출 내용 셀 — detected_text 볼드
+                    c1 = row.cells[1]; c1.paragraphs[0].clear()
+                    para1 = c1.paragraphs[0]
+                    lc, lt = ctx.lower(), detected.lower()
+                    idx = lc.find(lt) if lt else -1
+                    if idx != -1:
+                        if idx > 0:
+                            rr = para1.add_run(ctx[:idx]); rr.font.size = Pt(9)
+                        rr = para1.add_run(ctx[idx:idx+len(detected)])
+                        rr.font.size = Pt(9); rr.font.bold = True
+                        if idx + len(detected) < len(ctx):
+                            rr = para1.add_run(ctx[idx+len(detected):]); rr.font.size = Pt(9)
+                    else:
+                        para1.add_run(ctx).font.size = Pt(9)
+
+                    # 비고/수정 제안 셀
+                    c2 = row.cells[2]; c2.paragraphs[0].clear()
+                    c2.paragraphs[0].add_run(col3_val or "").font.size = Pt(9)
                 tbl.columns[0].width = Cm(2)
                 tbl.columns[1].width = Cm(10)
                 tbl.columns[2].width = Cm(3)
