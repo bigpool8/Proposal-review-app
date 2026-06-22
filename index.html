@@ -166,8 +166,6 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
       <span style="font-size:1.125rem;font-weight:700;color:#4f46e5">제안서 검토 결과</span>
     </div>
     <div class="flex items-center gap-3">
-      <button class="btn btn-outline btn-sm" id="dl-pdf-btn" style="display:none" onclick="downloadPdf()">⬇ PDF</button>
-      <button class="btn btn-outline btn-sm" id="dl-word-btn" style="display:none" onclick="downloadWord()">⬇ Word</button>
       <span id="res-username" class="bold" style="color:#065f46"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
@@ -180,6 +178,10 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
   <div id="res-content" style="display:none">
     <div class="main">
       <div class="summary-grid" id="res-summary"></div>
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin:1rem 0">
+        <button class="btn btn-outline btn-sm" id="dl-pdf-btn" onclick="downloadPdf()">⬇ PDF 다운로드</button>
+        <button class="btn btn-outline btn-sm" id="dl-word-btn" onclick="downloadWord()">⬇ Word 다운로드</button>
+      </div>
       <div id="res-body"></div>
     </div>
   </div>
@@ -474,7 +476,6 @@ function openResults(id){
   jobId=id;
   $('res-username').textContent=un();
   $('res-loading').style.display='block'; $('res-content').style.display='none'; $('res-failed').style.display='none';
-  $('dl-pdf-btn').style.display='none'; $('dl-word-btn').style.display='none';
   show('results'); poll();
 }
 
@@ -604,7 +605,6 @@ let resultData = null;
 function renderResults(data){
   resultData = data;
   $('res-loading').style.display='none'; $('res-content').style.display='block';
-  $('dl-pdf-btn').style.display='inline-flex'; $('dl-word-btn').style.display='inline-flex';
   const s=data.summary;
   $('res-summary').innerHTML=`
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">최상급 표현</p><p style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
