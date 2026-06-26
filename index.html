@@ -748,7 +748,7 @@ function buildPdfHtml(data){
         h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">오타 (${typs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:100px">수정 제안</td></tr>`;
-        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};color:#dc2626">${esc(r.suggestion||'')}</td></tr>`; });
+        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};color:#dc2626">${esc(r.suggestion||'')}</td></tr>`; });
         h+=`</table>`;
       }
       if(blds.length){
@@ -822,7 +822,7 @@ function renderResults(data){
         bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">오타 (${typs.length}건)</span></div>`;
         typs.forEach((r,i)=>bHtml+=`<div class="result-item typ" ${i<typs.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
           <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
           ${r.suggestion?`<p class="text-xs mt-1" style="color:#dc2626">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
           </div>
         </div>`);

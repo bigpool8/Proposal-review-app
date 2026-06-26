@@ -555,7 +555,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
-                _add_result_table(typs, "수정 제안", "suggestion")
+                _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE)
 
             if blds:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")
