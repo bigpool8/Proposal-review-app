@@ -16,7 +16,7 @@ _MIME_EXT = {
     "application/pdf": ".pdf",
 }
 
-MIN_IMAGE_BYTES = 10_000  # 10 KB 미만 아이콘·불릿 이미지 제외
+MIN_IMAGE_BYTES = 3_000  # 3 KB 미만 아이콘·불릿 이미지 제외 (로고 등 소형 PNG 포함)
 MAX_IMAGES_PER_FILE = 40  # 파일당 최대 처리 이미지 수
 
 
