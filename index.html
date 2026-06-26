@@ -431,7 +431,7 @@ function renderJobs(jobs) {
 
 function toggleSel(id,chk){ chk.checked?sel.add(id):sel.delete(id); updateDel(); }
 function toggleAll(){ const c=$('chk-all').checked; document.querySelectorAll('#d-list input[type=checkbox]').forEach(x=>{x.checked=c;const m=x.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];if(m){c?sel.add(m):sel.delete(m);}}); updateDel(); }
-function updateDel(){ const b=$('del-btn'); b.style.display=sel.size>0?'inline-flex':'none'; b.textContent=`선택 삭제 (${sel.size})`; }
+function updateDel(){ const b=$('del-btn'); b.disabled=false; b.style.display=sel.size>0?'inline-flex':'none'; b.textContent=`선택 삭제 (${sel.size})`; }
 
 async function deleteSelected(){
   setBtn('del-btn',true,'','삭제 중...');
