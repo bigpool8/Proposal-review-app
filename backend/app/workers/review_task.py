@@ -142,104 +142,107 @@ def _detect_blind_in_images(
     if not text_keywords and not logo_b64:
         return
 
+    # 동일 이미지에 대해 Claude API 중복 호출 방지 (레이아웃 공통 이미지 등)
+    text_cache: dict[int, list[str]] = {}   # img_hash -> 검출된 키워드 목록
+    logo_cache: dict[int, bool] = {}        # img_hash -> 로고 일치 여부
+
     for img in images:
         img_bytes = img.get("image_bytes") or b""
         if not img_bytes:
             continue
-        img_b64 = base64.b64encode(img_bytes).decode()
+        img_hash = hash(img_bytes)
         img_mime = img.get("mime_type", "image/png")
         page_num = img["page_number"]
 
         # ── 1. 이미지 안에 회사명/대표자명 텍스트가 있는지 ──────────────────
         if text_keywords:
-            kw_list = ", ".join(f'"{k}"' for k in text_keywords)
-            try:
-                resp = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=256,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": img_mime, "data": img_b64},
-                            },
-                            {
-                                "type": "text",
-                                "text": (
+            if img_hash in text_cache:
+                found_kws = text_cache[img_hash]
+            else:
+                found_kws = []
+                img_b64 = base64.b64encode(img_bytes).decode()
+                kw_list = ", ".join(f'"{k}"' for k in text_keywords)
+                try:
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=256,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
+                                {"type": "text", "text": (
                                     f"이 이미지에서 다음 텍스트가 보이는지 확인하세요: {kw_list}\n"
                                     "결과만 JSON으로 출력하세요 (다른 텍스트 금지):\n"
                                     '{"found": [{"text": "검색어", "visible": true}]}'
-                                ),
-                            },
-                        ],
-                    }],
-                )
-                raw = resp.content[0].text.strip()
-                if raw.startswith("```"):
-                    raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
-                data = json.loads(raw)
-                for item in data.get("found", []):
-                    if item.get("visible"):
-                        kw_text = item.get("text", "")
-                        sb.table("review_results").insert({
-                            "id": str(uuid.uuid4()),
-                            "file_id": review_file["id"],
-                            "category": "blind_image",
-                            "detected_text": kw_text,
-                            "suggestion": None,
-                            "page_number": page_num,
-                            "context": f"이미지에서 '{kw_text}' 텍스트 검출",
-                        }).execute()
-            except Exception:
-                pass
+                                )},
+                            ],
+                        }],
+                    )
+                    raw = resp.content[0].text.strip()
+                    if raw.startswith("```"):
+                        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                    data = json.loads(raw)
+                    found_kws = [item["text"] for item in data.get("found", []) if item.get("visible")]
+                except Exception:
+                    pass
+                text_cache[img_hash] = found_kws
+
+            for kw_text in found_kws:
+                sb.table("review_results").insert({
+                    "id": str(uuid.uuid4()),
+                    "file_id": review_file["id"],
+                    "category": "blind_image",
+                    "detected_text": kw_text,
+                    "suggestion": None,
+                    "page_number": page_num,
+                    "context": f"이미지에서 '{kw_text}' 텍스트 검출",
+                }).execute()
 
         # ── 2. 로고 이미지 시각적 유사도 비교 ───────────────────────────────
         if logo_b64:
-            try:
-                resp = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=128,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
-                            {
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64},
-                            },
-                            {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
-                            {
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": img_mime, "data": img_b64},
-                            },
-                            {
-                                "type": "text",
-                                "text": (
+            if img_hash in logo_cache:
+                is_logo = logo_cache[img_hash]
+            else:
+                is_logo = False
+                img_b64 = base64.b64encode(img_bytes).decode()
+                try:
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=128,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
+                                {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
+                                {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
+                                {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
+                                {"type": "text", "text": (
                                     "두 번째 이미지가 첫 번째 이미지(참조 로고)와 같은 로고입니까?\n"
                                     "JSON으로만 답변 (다른 텍스트 금지):\n"
                                     '{"is_same_logo": true, "confidence": "high"}'
-                                ),
-                            },
-                        ],
-                    }],
-                )
-                raw = resp.content[0].text.strip()
-                if raw.startswith("```"):
-                    raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
-                data = json.loads(raw)
-                if data.get("is_same_logo") and data.get("confidence") in ("high", "medium"):
-                    sb.table("review_results").insert({
-                        "id": str(uuid.uuid4()),
-                        "file_id": review_file["id"],
-                        "category": "blind_image",
-                        "detected_text": "로고",
-                        "suggestion": None,
-                        "page_number": page_num,
-                        "context": f"로고 이미지 검출 (신뢰도: {data.get('confidence', '')})",
-                    }).execute()
-            except Exception:
-                pass
+                                )},
+                            ],
+                        }],
+                    )
+                    raw = resp.content[0].text.strip()
+                    if raw.startswith("```"):
+                        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                    data = json.loads(raw)
+                    is_logo = bool(data.get("is_same_logo") and data.get("confidence") in ("high", "medium"))
+                except Exception:
+                    pass
+                logo_cache[img_hash] = is_logo
+
+            if is_logo:
+                sb.table("review_results").insert({
+                    "id": str(uuid.uuid4()),
+                    "file_id": review_file["id"],
+                    "category": "blind_image",
+                    "detected_text": "로고",
+                    "suggestion": None,
+                    "page_number": page_num,
+                    "context": "로고 이미지 검출",
+                }).execute()
 
 
 def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None) -> None:
