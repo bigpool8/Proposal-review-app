@@ -430,11 +430,11 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
     summary_rows = [
         ("구분", "건수"),
-        ("최상급 표현", f"{total_sup}건"),
+        ("허위/과장 가능 문구(최상급 표현)", f"{total_sup}건"),
         ("오타", f"{total_typo}건"),
     ]
     if blind_eval:
-        summary_rows.append(("블라인드 평가", f"{total_blind}건"))
+        summary_rows.append(("블라인드 평가: 회사식별정보", f"{total_blind}건"))
     summary_rows.append(("이슈 파일", f"{files_with_issues}개"))
 
     tbl = doc.add_table(rows=len(summary_rows), cols=2)
@@ -540,7 +540,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 doc.add_paragraph()
 
             if sups:
-                r = doc.add_paragraph().add_run(f"  최상급 표현 ({len(sups)}건)")
+                r = doc.add_paragraph().add_run(f"  허위/과장 가능 문구(최상급 표현) ({len(sups)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
@@ -554,14 +554,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 _add_result_table(typs, "수정 제안", "suggestion")
 
             if blds:
-                r = doc.add_paragraph().add_run(f"  블라인드 평가 — 텍스트 ({len(blds)}건)")
+                r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
                 _add_result_table(blds, "비고", "detected_text")
 
             if bld_imgs:
-                r = doc.add_paragraph().add_run(f"  블라인드 평가 — 이미지 ({len(bld_imgs)}건)")
+                r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(이미지) ({len(bld_imgs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)

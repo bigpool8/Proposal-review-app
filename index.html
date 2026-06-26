@@ -713,9 +713,9 @@ function buildPdfHtml(data){
     <h2 style="font-size:12px;font-weight:700;border-bottom:2px solid #4f46e5;padding-bottom:3px;margin:0 0 8px">검토 요약</h2>
     <table style="border-collapse:collapse;margin-bottom:20px">
       <tr><td style="${hs};width:130px">구분</td><td style="${hs};width:80px">건수</td></tr>
-      <tr><td style="${cs}">최상급 표현</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>
+      <tr><td style="${cs}">허위/과장 가능 문구(최상급 표현)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>
       <tr><td style="${cs}">오타</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_typo}건</td></tr>
-      ${hasBlind?`<tr><td style="${cs}">블라인드 평가</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
+      ${hasBlind?`<tr><td style="${cs}">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
       <tr><td style="${cs}">이슈 파일</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${s.files_with_issues}개</td></tr>
     </table>`;
 
@@ -737,7 +737,7 @@ function buildPdfHtml(data){
       const blds=results.filter(r=>r.category==='blind');
       const bldImgs=results.filter(r=>r.category==='blind_image');
       if(sups.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">최상급 표현 (${sups.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">허위/과장 가능 문구(최상급 표현) (${sups.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
         sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
@@ -751,14 +751,14 @@ function buildPdfHtml(data){
         h+=`</table>`;
       }
       if(blds.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 — 텍스트 (${blds.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
         blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
         h+=`</table>`;
       }
       if(bldImgs.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 — 이미지 (${bldImgs.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
         bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${esc(r.context||r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
@@ -787,9 +787,9 @@ function renderResults(data){
   const sg=$('res-summary');
   sg.style.gridTemplateColumns=hasBlind?'repeat(4,1fr)':'repeat(3,1fr)';
   sg.innerHTML=`
-    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">최상급 표현</p><p style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
+    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">허위/과장 가능 문구(최상급 표현)</p><p style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">오타</p><p style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
-    ${hasBlind?`<div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">블라인드 평가</p><p style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
+    ${hasBlind?`<div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">블라인드 평가: 회사식별정보</p><p style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">검토 파일</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개 파일에서 검출</p></div>`;
   const body=$('res-body'); body.innerHTML='';
   data.proposal_types.forEach(pt=>{
@@ -809,7 +809,7 @@ function renderResults(data){
       if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.75rem 1.25rem"><p class="text-sm" style="color:#92400e"><strong>파싱 오류:</strong> ${esc(f.parse_error)}</p></div>`;
       if(!f.results.length&&!f.parse_error) bHtml+=`<div class="text-center text-sm text-gray" style="padding:2rem">검출된 항목 없음</div>`;
       if(sups.length){
-        bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">최상급 표현 (${sups.length}건)</span></div>`;
+        bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">허위/과장 가능 문구(최상급 표현) (${sups.length}건)</span></div>`;
         sups.forEach((r,i)=>bHtml+=`<div class="result-item sup" ${i<sups.length-1?'style="border-bottom:1px solid rgba(251,191,36,.12)"':''}>
           <span class="pg-badge" style="color:#d97706">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
@@ -826,7 +826,7 @@ function renderResults(data){
         </div>`);
       }
       if(blds.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가 — 텍스트 (${blds.length}건)</span></div>`;
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
         blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
@@ -834,7 +834,7 @@ function renderResults(data){
         </div>`);
       }
       if(bldImgs.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가 — 이미지 (${bldImgs.length}건)</span></div>`;
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
         bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${esc(r.context||r.detected_text)}</p>
