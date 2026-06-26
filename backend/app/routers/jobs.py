@@ -541,7 +541,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
-                _add_result_table(blds, "비고", None, "식별 정보")
+                _add_result_table(blds, "비고", "detected_text")
 
         doc.add_paragraph()
 
