@@ -143,8 +143,10 @@ def _detect_blind_in_images(
         return
 
     # 동일 이미지에 대해 Claude API 중복 호출 방지 (레이아웃 공통 이미지 등)
-    text_cache: dict[int, list[str]] = {}   # img_hash -> 검출된 키워드 목록
-    logo_cache: dict[int, bool] = {}        # img_hash -> 로고 일치 여부
+    # logo_cache: img_hash -> (is_logo, logo_text)  logo_text는 로고에 표시된 텍스트
+    # text_cache: img_hash -> (found_kws, image_description)
+    logo_cache: dict[int, tuple[bool, str]] = {}
+    text_cache: dict[int, tuple[list[str], str]] = {}
 
     for img in images:
         img_bytes = img.get("image_bytes") or b""
@@ -156,9 +158,10 @@ def _detect_blind_in_images(
 
         # ── 1. 로고 이미지 시각적 유사도 비교 (먼저 확인) ──────────────────
         is_logo = False
+        logo_text = ""
         if logo_b64:
             if img_hash in logo_cache:
-                is_logo = logo_cache[img_hash]
+                is_logo, logo_text = logo_cache[img_hash]
             else:
                 img_b64 = base64.b64encode(img_bytes).decode()
                 try:
@@ -176,8 +179,9 @@ def _detect_blind_in_images(
                                     "두 번째 이미지가 첫 번째 이미지(참조 로고)와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
                                     "주의: 두 번째 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
                                     "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
+                                    "로고인 경우 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
                                     "JSON으로만 답변 (다른 텍스트 금지):\n"
-                                    '{"is_same_logo": true, "confidence": "high"}'
+                                    '{"is_same_logo": true, "confidence": "high", "logo_text": "LG U+"}'
                                 )},
                             ],
                         }],
@@ -187,41 +191,46 @@ def _detect_blind_in_images(
                         raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
                     data = json.loads(raw)
                     is_logo = bool(data.get("is_same_logo") and data.get("confidence") in ("high", "medium"))
+                    logo_text = data.get("logo_text", "").strip() if is_logo else ""
                 except Exception:
                     pass
-                logo_cache[img_hash] = is_logo
+                logo_cache[img_hash] = (is_logo, logo_text)
 
             if is_logo:
+                logo_ctx = f"로고 이미지({logo_text}) 검출" if logo_text else "로고 이미지 검출"
                 sb.table("review_results").insert({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
-                    "detected_text": "로고",
+                    "detected_text": f"로고({logo_text})" if logo_text else "로고",
                     "suggestion": None,
                     "page_number": page_num,
-                    "context": "로고 이미지 검출",
+                    "context": logo_ctx,
                 }).execute()
 
         # ── 2. 이미지 안에 회사명/대표자명 텍스트가 있는지 (로고 이미지 제외) ──
         if text_keywords and not is_logo:
             if img_hash in text_cache:
-                found_kws = text_cache[img_hash]
+                found_kws, image_description = text_cache[img_hash]
             else:
                 found_kws = []
+                image_description = ""
                 img_b64 = base64.b64encode(img_bytes).decode()
                 kw_list = ", ".join(f'"{k}"' for k in text_keywords)
                 try:
                     resp = client.messages.create(
                         model="claude-sonnet-4-6",
-                        max_tokens=256,
+                        max_tokens=300,
                         messages=[{
                             "role": "user",
                             "content": [
                                 {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
                                 {"type": "text", "text": (
                                     f"이 이미지에서 다음 텍스트가 보이는지 확인하세요: {kw_list}\n"
+                                    "image_description에 이미지 종류를 한국어로 간략히 설명하세요"
+                                    "(예: '신용평가서 문서', '건물 사진', '로고 이미지', '슬라이드 배경').\n"
                                     "결과만 JSON으로 출력하세요 (다른 텍스트 금지):\n"
-                                    '{"found": [{"text": "검색어", "visible": true}]}'
+                                    '{"found": [{"text": "검색어", "visible": true}], "image_description": "이미지 종류"}'
                                 )},
                             ],
                         }],
@@ -231,11 +240,16 @@ def _detect_blind_in_images(
                         raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
                     data = json.loads(raw)
                     found_kws = [item["text"] for item in data.get("found", []) if item.get("visible")]
+                    image_description = data.get("image_description", "").strip()
                 except Exception:
                     pass
-                text_cache[img_hash] = found_kws
+                text_cache[img_hash] = (found_kws, image_description)
 
             for kw_text in found_kws:
+                if image_description:
+                    img_ctx = f"{image_description} 이미지에서 '{kw_text}' 텍스트 검출"
+                else:
+                    img_ctx = f"이미지에서 '{kw_text}' 텍스트 검출"
                 sb.table("review_results").insert({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
@@ -243,7 +257,7 @@ def _detect_blind_in_images(
                     "detected_text": kw_text,
                     "suggestion": None,
                     "page_number": page_num,
-                    "context": f"이미지에서 '{kw_text}' 텍스트 검출",
+                    "context": img_ctx,
                 }).execute()
 
 
