@@ -497,7 +497,9 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 doc.add_paragraph()
                 continue
 
-            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요"):
+            BLUE = RGBColor(0x1D, 0x4E, 0xD8)
+
+            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요", highlight_color=None):
                 tbl = doc.add_table(rows=len(items) + 1, cols=3)
                 tbl.style = "Table Grid"
                 for ci, h in enumerate(["페이지", "검출 내용", col3_header]):
@@ -516,7 +518,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     c0 = row.cells[0]; c0.paragraphs[0].clear()
                     c0.paragraphs[0].add_run(f"{item['page_number']}p").font.size = Pt(9)
 
-                    # 검출 내용 셀 — detected_text 볼드
+                    # 검출 내용 셀 — detected_text 볼드 (+ 색상)
                     c1 = row.cells[1]; c1.paragraphs[0].clear()
                     para1 = c1.paragraphs[0]
                     lc, lt = ctx.lower(), detected.lower()
@@ -526,6 +528,8 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                             rr = para1.add_run(ctx[:idx]); rr.font.size = Pt(9)
                         rr = para1.add_run(ctx[idx:idx+len(detected)])
                         rr.font.size = Pt(9); rr.font.bold = True
+                        if highlight_color:
+                            rr.font.color.rgb = highlight_color
                         if idx + len(detected) < len(ctx):
                             rr = para1.add_run(ctx[idx+len(detected):]); rr.font.size = Pt(9)
                     else:
@@ -544,7 +548,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
-                _add_result_table(sups, "비고", None)
+                _add_result_table(sups, "비고", None, highlight_color=BLUE)
 
             if typs:
                 r = doc.add_paragraph().add_run(f"  오타 ({len(typs)}건)")
@@ -558,14 +562,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
-                _add_result_table(blds, "비고", "detected_text")
+                _add_result_table(blds, "비고", "detected_text", highlight_color=BLUE)
 
             if bld_imgs:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(이미지) ({len(bld_imgs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
-                _add_result_table(bld_imgs, "비고", "detected_text")
+                _add_result_table(bld_imgs, "비고", "detected_text", highlight_color=BLUE)
 
         doc.add_paragraph()
 

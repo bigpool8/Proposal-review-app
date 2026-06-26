@@ -206,7 +206,7 @@ def _detect_blind_in_images(
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
-                    "detected_text": f"로고({logo_text})" if logo_text else "로고",
+                    "detected_text": logo_text if logo_text else "로고",
                     "suggestion": None,
                     "page_number": page_num,
                     "context": logo_ctx,

@@ -691,12 +691,13 @@ async function downloadPdf(){
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
 }
 
-function boldCtx(ctx, det){
+function boldCtx(ctx, det, color=''){
   const full=(ctx||det||'').substring(0,300);
   if(!det||!ctx) return esc(full);
   const i=full.toLowerCase().indexOf(det.toLowerCase());
   if(i===-1) return esc(full);
-  return esc(full.slice(0,i))+'<strong>'+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
+  const s=color?` style="color:${color}"`:'' ;
+  return esc(full.slice(0,i))+`<strong${s}>`+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
 }
 
 function buildPdfHtml(data){
@@ -740,7 +741,7 @@ function buildPdfHtml(data){
         h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">허위/과장 가능 문구(최상급 표현) (${sups.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
+        sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
         h+=`</table>`;
       }
       if(typs.length){
@@ -754,14 +755,14 @@ function buildPdfHtml(data){
         h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
+        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
         h+=`</table>`;
       }
       if(bldImgs.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${esc(r.context||r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
+        bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#6d28d9">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
         h+=`</table>`;
       }
     });
@@ -771,11 +772,12 @@ function buildPdfHtml(data){
   return h;
 }
 
-function hlCtx(ctx,det){
+function hlCtx(ctx,det,color=''){
   if(!ctx) return '<em style="color:#9ca3af">컨텍스트 없음</em>';
-  const lc=ctx.toLowerCase(),lt=det.toLowerCase(),i=lc.indexOf(lt);
+  const lc=ctx.toLowerCase(),lt=(det||'').toLowerCase(),i=lt?lc.indexOf(lt):-1;
   if(i===-1) return esc(ctx);
-  return esc(ctx.slice(0,i))+'<strong>'+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
+  const s=color?` style="color:${color}"`:'' ;
+  return esc(ctx.slice(0,i))+`<strong${s}>`+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
 }
 
 let resultData = null;
@@ -812,7 +814,7 @@ function renderResults(data){
         bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">허위/과장 가능 문구(최상급 표현) (${sups.length}건)</span></div>`;
         sups.forEach((r,i)=>bHtml+=`<div class="result-item sup" ${i<sups.length-1?'style="border-bottom:1px solid rgba(251,191,36,.12)"':''}>
           <span class="pg-badge" style="color:#d97706">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
           <span style="font-size:.75rem;font-weight:500;color:#b45309;background:#fef3c7;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">검토 필요</span></div>
         </div>`);
       }
@@ -829,7 +831,7 @@ function renderResults(data){
         bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
         blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
           <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
         </div>`);
       }
@@ -837,7 +839,7 @@ function renderResults(data){
         bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
         bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${esc(r.context||r.detected_text)}</p>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</p>
           <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">🖼 ${r.detected_text||'이미지'} 검출</span></div>
         </div>`);
       }
