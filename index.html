@@ -691,13 +691,13 @@ async function downloadPdf(){
   finally { btn.disabled=false; btn.textContent='⬇ PDF 다운로드'; }
 }
 
-function boldCtx(ctx, det, color=''){
+function boldCtx(ctx, det, color){
   const full=(ctx||det||'').substring(0,300);
   if(!det||!ctx) return esc(full);
   const i=full.toLowerCase().indexOf(det.toLowerCase());
   if(i===-1) return esc(full);
-  const s=color?` style="color:${color}"`:'' ;
-  return esc(full.slice(0,i))+`<strong${s}>`+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
+  const open=color?'<strong style="color:'+color+'">':'<strong>';
+  return esc(full.slice(0,i))+open+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
 }
 
 function buildPdfHtml(data){
@@ -772,12 +772,12 @@ function buildPdfHtml(data){
   return h;
 }
 
-function hlCtx(ctx,det,color=''){
+function hlCtx(ctx,det,color){
   if(!ctx) return '<em style="color:#9ca3af">컨텍스트 없음</em>';
   const lc=ctx.toLowerCase(),lt=(det||'').toLowerCase(),i=lt?lc.indexOf(lt):-1;
   if(i===-1) return esc(ctx);
-  const s=color?` style="color:${color}"`:'' ;
-  return esc(ctx.slice(0,i))+`<strong${s}>`+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
+  const open=color?'<strong style="color:'+color+'">':'<strong>';
+  return esc(ctx.slice(0,i))+open+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
 }
 
 let resultData = null;
