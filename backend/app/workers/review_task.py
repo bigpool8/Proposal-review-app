@@ -75,41 +75,44 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
 
 
 def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
-    """입력된 회사 식별 키워드를 텍스트에서 직접 검색해 저장."""
+    """입력된 회사 식별 키워드를 텍스트에서 검색해 발견된 모든 위치를 저장."""
     for page in pages:
         text = page.get("text") or ""
         if not text:
             continue
         text_lower = text.lower()
         page_num = page["page_number"]
-        recorded = set()
 
         for kw in blind_keywords:
             value = kw.get("value", "").strip()
             if not value:
                 continue
             key = value.lower()
-            if key in recorded:
-                continue
+            key_len = len(key)
 
-            idx = text_lower.find(key)
-            if idx == -1:
-                continue
-
-            recorded.add(key)
-            ctx_start = max(0, idx - 80)
-            ctx_end = min(len(text), idx + len(value) + 80)
-            context = text[ctx_start:ctx_end].strip()
-
-            sb.table("review_results").insert({
-                "id": str(uuid.uuid4()),
-                "file_id": review_file["id"],
-                "category": "blind",
-                "detected_text": value,
-                "suggestion": None,
-                "page_number": page_num,
-                "context": context,
-            }).execute()
+            # 페이지 내 모든 발생 위치를 순회
+            start = 0
+            seen_contexts: set[str] = set()
+            while True:
+                idx = text_lower.find(key, start)
+                if idx == -1:
+                    break
+                ctx_start = max(0, idx - 80)
+                ctx_end = min(len(text), idx + key_len + 80)
+                context = text[ctx_start:ctx_end].strip()
+                # 동일 컨텍스트 중복 저장 방지
+                if context not in seen_contexts:
+                    seen_contexts.add(context)
+                    sb.table("review_results").insert({
+                        "id": str(uuid.uuid4()),
+                        "file_id": review_file["id"],
+                        "category": "blind",
+                        "detected_text": value,
+                        "suggestion": None,
+                        "page_number": page_num,
+                        "context": context,
+                    }).execute()
+                start = idx + 1  # 다음 위치 탐색
 
 
 def _detect_blind_in_images(
