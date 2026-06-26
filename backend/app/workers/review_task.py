@@ -173,7 +173,9 @@ def _detect_blind_in_images(
                                 {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
                                 {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
                                 {"type": "text", "text": (
-                                    "두 번째 이미지가 첫 번째 이미지(참조 로고)와 같은 로고입니까?\n"
+                                    "두 번째 이미지가 첫 번째 이미지(참조 로고)와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
+                                    "주의: 두 번째 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
+                                    "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
                                     "JSON으로만 답변 (다른 텍스트 금지):\n"
                                     '{"is_same_logo": true, "confidence": "high"}'
                                 )},
