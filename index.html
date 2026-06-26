@@ -180,10 +180,19 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
       </label>
       <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">제안서에서 회사 식별 정보를 검출합니다.</p>
       <div id="blind-eval-section" style="display:none;margin-top:.875rem">
-        <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.625rem">검출할 회사 식별 정보</p>
+        <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.625rem">① 텍스트 식별정보 (회사명 / 대표자명)</p>
         <div id="blind-keyword-list"></div>
         <button class="btn btn-outline btn-sm" onclick="addBlindKeyword()" style="margin-top:.25rem;font-size:.8125rem">+ 항목 추가</button>
-        <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">※ 현재 텍스트 기반 검출만 지원합니다. 이미지(로고 등)는 현재 검출되지 않으며 추후에 지원할 예정입니다.</p>
+        <div style="margin-top:1rem;border-top:1px solid #f3f4f6;padding-top:1rem">
+          <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.5rem">② 회사 로고 이미지 <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택)</span></p>
+          <label id="logo-upload-label" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem .875rem;border:1px dashed #d1d5db;border-radius:.5rem;font-size:.8125rem;color:#6b7280;background:#fafafa">
+            <span>🖼 로고 파일 선택</span>
+            <input type="file" id="blind-logo-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="onLogoSelected(this)">
+          </label>
+          <span id="logo-file-name" style="font-size:.8125rem;color:#374151;margin-left:.75rem"></span>
+          <button id="logo-clear-btn" onclick="clearLogo()" style="display:none;font-size:.75rem;color:#ef4444;background:none;border:none;cursor:pointer;margin-left:.25rem">✕</button>
+          <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">※ 로고 검출은 Claude 비전 AI를 사용합니다. 해상도가 낮거나 복잡한 배경이 있으면 검출이 누락될 수 있습니다.</p>
+        </div>
       </div>
     </div>
     <div style="padding-top:.5rem">
@@ -559,10 +568,22 @@ function renderBlindKeywords(){
   `).join('');
 }
 
+function onLogoSelected(inp){
+  const f=inp.files[0];
+  if(!f){clearLogo();return;}
+  $('logo-file-name').textContent=f.name;
+  $('logo-clear-btn').style.display='inline';
+}
+function clearLogo(){
+  const inp=$('blind-logo-input');
+  if(inp){inp.value='';}
+  $('logo-file-name').textContent='';
+  $('logo-clear-btn').style.display='none';
+}
+
 async function doStart(){
   setBtn('modal-start-btn',true,'시작','처리 중...');
   try {
-    // 전역 변수 대신 DOM 상태를 직접 읽어 동기화 문제 방지
     const chk=$('blind-eval-chk');
     const isBlind=chk?chk.checked:false;
     const kws=[];
@@ -574,7 +595,21 @@ async function doStart(){
         if(inp){const v=inp.value.trim(); if(v) kws.push({type:sel?sel.value:'회사명',value:v});}
       });
     }
-    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws})});
+    let logoB64=null, logoMime=null;
+    if(isBlind){
+      const logoInp=$('blind-logo-input');
+      if(logoInp&&logoInp.files[0]){
+        const file=logoInp.files[0];
+        logoMime=file.type||'image/png';
+        logoB64=await new Promise((res,rej)=>{
+          const reader=new FileReader();
+          reader.onload=e=>res(e.target.result.split(',')[1]);
+          reader.onerror=rej;
+          reader.readAsDataURL(file);
+        });
+      }
+    }
+    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logo_b64:logoB64,blind_logo_mime:logoMime})});
     hideModal(); openResults(jobId);
   }
   catch(e){ toast(e.message,'error'); }
@@ -700,6 +735,7 @@ function buildPdfHtml(data){
       const sups=results.filter(r=>r.category==='superlative');
       const typs=results.filter(r=>r.category==='typo');
       const blds=results.filter(r=>r.category==='blind');
+      const bldImgs=results.filter(r=>r.category==='blind_image');
       if(sups.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">최상급 표현 (${sups.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
@@ -715,10 +751,17 @@ function buildPdfHtml(data){
         h+=`</table>`;
       }
       if(blds.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 (${blds.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 — 텍스트 (${blds.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
         blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
+        h+=`</table>`;
+      }
+      if(bldImgs.length){
+        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가 — 이미지 (${bldImgs.length}건)</p>
+        <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
+        bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${esc(r.context||r.detected_text)}</td><td style="${cs};text-align:center;color:#6d28d9">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
         h+=`</table>`;
       }
     });
@@ -761,6 +804,7 @@ function renderResults(data){
       const sups=f.results.filter(r=>r.category==='superlative');
       const typs=f.results.filter(r=>r.category==='typo');
       const blds=f.results.filter(r=>r.category==='blind');
+      const bldImgs=f.results.filter(r=>r.category==='blind_image');
       let bHtml='';
       if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.75rem 1.25rem"><p class="text-sm" style="color:#92400e"><strong>파싱 오류:</strong> ${esc(f.parse_error)}</p></div>`;
       if(!f.results.length&&!f.parse_error) bHtml+=`<div class="text-center text-sm text-gray" style="padding:2rem">검출된 항목 없음</div>`;
@@ -782,11 +826,19 @@ function renderResults(data){
         </div>`);
       }
       if(blds.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가 (${blds.length}건)</span></div>`;
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가 — 텍스트 (${blds.length}건)</span></div>`;
         blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
           <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text)}</p>
           <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
+        </div>`);
+      }
+      if(bldImgs.length){
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가 — 이미지 (${bldImgs.length}건)</span></div>`;
+        bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
+          <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${esc(r.context||r.detected_text)}</p>
+          <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">🖼 ${r.detected_text||'이미지'} 검출</span></div>
         </div>`);
       }
       const fc=document.createElement('div'); fc.className='result-file';

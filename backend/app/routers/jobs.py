@@ -269,10 +269,25 @@ def start_job(
     if not files:
         raise HTTPException(status_code=400, detail="파일을 먼저 업로드하세요.")
 
+    # 로고 이미지 저장 (base64 → 파일)
+    logo_path: str | None = None
+    if req.blind_eval and req.blind_logo_b64:
+        import base64 as _b64
+        logo_dir = os.path.join(UPLOAD_BASE, job_id)
+        os.makedirs(logo_dir, exist_ok=True)
+        ext = ".png"
+        if req.blind_logo_mime:
+            mime_ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
+            ext = mime_ext.get(req.blind_logo_mime, ".png")
+        logo_path = os.path.abspath(os.path.join(logo_dir, f"logo{ext}"))
+        with open(logo_path, "wb") as f:
+            f.write(_b64.b64decode(req.blind_logo_b64))
+
     sb.table("proposal_review").update({
         "status": "pending",
         "blind_eval": req.blind_eval,
         "blind_keywords": req.blind_keywords,
+        "blind_logo_path": logo_path,
     }).eq("id", job_id).execute()
     background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}
@@ -317,7 +332,7 @@ def get_job_results(
             )
             sup = sum(1 for r in items if r["category"] == "superlative")
             typo = sum(1 for r in items if r["category"] == "typo")
-            blind = sum(1 for r in items if r["category"] == "blind")
+            blind = sum(1 for r in items if r["category"] in ("blind", "blind_image"))
             total_superlative += sup
             total_typo += typo
             total_blind += blind
@@ -355,6 +370,7 @@ def get_job_results(
         "error_message": job.get("error_message"),
         "blind_eval": job.get("blind_eval", False),
         "blind_keywords": job.get("blind_keywords") or [],
+        "has_logo": bool(job.get("blind_logo_path")),
         "summary": {
             "total_superlative": total_superlative,
             "total_typo": total_typo,
@@ -402,7 +418,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         results = f.get("review_results") or []
         sup = sum(1 for x in results if x["category"] == "superlative")
         typo = sum(1 for x in results if x["category"] == "typo")
-        bl = sum(1 for x in results if x["category"] == "blind")
+        bl = sum(1 for x in results if x["category"] in ("blind", "blind_image"))
         total_sup += sup
         total_typo += typo
         total_blind += bl
@@ -456,6 +472,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             sups = [x for x in results if x["category"] == "superlative"]
             typs = [x for x in results if x["category"] == "typo"]
             blds = [x for x in results if x["category"] == "blind"]
+            bld_imgs = [x for x in results if x["category"] == "blind_image"]
 
             p = doc.add_paragraph()
             r = p.add_run(f"▶ {f['original_filename']}")
@@ -537,11 +554,18 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 _add_result_table(typs, "수정 제안", "suggestion")
 
             if blds:
-                r = doc.add_paragraph().add_run(f"  블라인드 평가 ({len(blds)}건)")
+                r = doc.add_paragraph().add_run(f"  블라인드 평가 — 텍스트 ({len(blds)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
                 _add_result_table(blds, "비고", "detected_text")
+
+            if bld_imgs:
+                r = doc.add_paragraph().add_run(f"  블라인드 평가 — 이미지 ({len(bld_imgs)}건)")
+                r.font.bold = True
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
+                _add_result_table(bld_imgs, "비고", "detected_text")
 
         doc.add_paragraph()
 

@@ -1,4 +1,6 @@
+import base64
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -73,14 +75,14 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
 
 
 def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
-    """입력된 회사 식별 키워드를 텍스트에서 직접 검색해 모두 저장."""
+    """입력된 회사 식별 키워드를 텍스트에서 직접 검색해 저장."""
     for page in pages:
         text = page.get("text") or ""
         if not text:
             continue
         text_lower = text.lower()
         page_num = page["page_number"]
-        recorded = set()  # 같은 페이지에서 동일 키워드 중복 방지
+        recorded = set()
 
         for kw in blind_keywords:
             value = kw.get("value", "").strip()
@@ -110,7 +112,134 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
             }).execute()
 
 
-def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list) -> None:
+def _detect_blind_in_images(
+    sb,
+    client: Anthropic,
+    review_file: dict,
+    blind_keywords: list,
+    logo_path: str | None,
+    images: list[dict],
+) -> None:
+    """추출된 이미지에서 Claude vision으로 회사 식별정보를 검출."""
+    if not images:
+        return
+
+    text_keywords = [kw.get("value", "").strip() for kw in blind_keywords if kw.get("value", "").strip()]
+
+    logo_b64: str | None = None
+    logo_mime: str = "image/png"
+    if logo_path and os.path.exists(logo_path):
+        with open(logo_path, "rb") as f:
+            logo_b64 = base64.b64encode(f.read()).decode()
+        ext = os.path.splitext(logo_path)[1].lower().lstrip(".")
+        logo_mime = f"image/{ext}" if ext in ("png", "jpeg", "jpg", "gif", "webp") else "image/png"
+        if logo_mime == "image/jpg":
+            logo_mime = "image/jpeg"
+
+    if not text_keywords and not logo_b64:
+        return
+
+    for img in images:
+        img_bytes = img.get("image_bytes") or b""
+        if not img_bytes:
+            continue
+        img_b64 = base64.b64encode(img_bytes).decode()
+        img_mime = img.get("mime_type", "image/png")
+        page_num = img["page_number"]
+
+        # ── 1. 이미지 안에 회사명/대표자명 텍스트가 있는지 ──────────────────
+        if text_keywords:
+            kw_list = ", ".join(f'"{k}"' for k in text_keywords)
+            try:
+                resp = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=256,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": img_mime, "data": img_b64},
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"이 이미지에서 다음 텍스트가 보이는지 확인하세요: {kw_list}\n"
+                                    "결과만 JSON으로 출력하세요 (다른 텍스트 금지):\n"
+                                    '{"found": [{"text": "검색어", "visible": true}]}'
+                                ),
+                            },
+                        ],
+                    }],
+                )
+                raw = resp.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                data = json.loads(raw)
+                for item in data.get("found", []):
+                    if item.get("visible"):
+                        kw_text = item.get("text", "")
+                        sb.table("review_results").insert({
+                            "id": str(uuid.uuid4()),
+                            "file_id": review_file["id"],
+                            "category": "blind_image",
+                            "detected_text": kw_text,
+                            "suggestion": None,
+                            "page_number": page_num,
+                            "context": f"이미지에서 '{kw_text}' 텍스트 검출",
+                        }).execute()
+            except Exception:
+                pass
+
+        # ── 2. 로고 이미지 시각적 유사도 비교 ───────────────────────────────
+        if logo_b64:
+            try:
+                resp = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=128,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64},
+                            },
+                            {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": img_mime, "data": img_b64},
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    "두 번째 이미지가 첫 번째 이미지(참조 로고)와 같은 로고입니까?\n"
+                                    "JSON으로만 답변 (다른 텍스트 금지):\n"
+                                    '{"is_same_logo": true, "confidence": "high"}'
+                                ),
+                            },
+                        ],
+                    }],
+                )
+                raw = resp.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                data = json.loads(raw)
+                if data.get("is_same_logo") and data.get("confidence") in ("high", "medium"):
+                    sb.table("review_results").insert({
+                        "id": str(uuid.uuid4()),
+                        "file_id": review_file["id"],
+                        "category": "blind_image",
+                        "detected_text": "로고",
+                        "suggestion": None,
+                        "page_number": page_num,
+                        "context": f"로고 이미지 검출 (신뢰도: {data.get('confidence', '')})",
+                    }).execute()
+            except Exception:
+                pass
+
+
+def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None) -> None:
     parsed = parse_file(
         review_file["storage_path"],
         review_file["mime_type"],
@@ -128,10 +257,11 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
         return
 
     pages = parsed["pages"]
+    images = parsed.get("images") or []
 
     # LLM 기반 검출 (최상급 표현 + 오타)
     for i in range(0, len(pages), CHUNK_SIZE):
-        chunk = pages[i : i + CHUNK_SIZE]
+        chunk = pages[i: i + CHUNK_SIZE]
         items = _call_llm(client, review_file["original_filename"], chunk)
         for item in items:
             sb.table("review_results").insert({
@@ -144,9 +274,13 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
                 "context": item.get("context"),
             }).execute()
 
-    # 블라인드 평가: 직접 문자열 검색 (모든 키워드, 모든 페이지)
+    # 블라인드 평가: 텍스트 직접 검색
     if blind_keywords:
         _search_blind_keywords(sb, review_file, blind_keywords, pages)
+
+    # 블라인드 평가: 이미지 검출 (회사명/대표자명 텍스트 + 로고)
+    if blind_keywords or logo_path:
+        _detect_blind_in_images(sb, client, review_file, blind_keywords, logo_path, images)
 
 
 def run_review_sync(job_id: str) -> None:
@@ -157,7 +291,9 @@ def run_review_sync(job_id: str) -> None:
             "started_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", job_id).execute()
 
-        job_res = sb.table("proposal_review").select("blind_eval,blind_keywords").eq("id", job_id).execute()
+        job_res = sb.table("proposal_review").select(
+            "blind_eval,blind_keywords,blind_logo_path"
+        ).eq("id", job_id).execute()
         job_data = job_res.data[0] if job_res.data else {}
         blind_eval = job_data.get("blind_eval", False)
         raw_keywords = job_data.get("blind_keywords") or []
@@ -165,13 +301,14 @@ def run_review_sync(job_id: str) -> None:
             [kw for kw in raw_keywords if kw.get("value", "").strip()]
             if blind_eval else []
         )
+        logo_path = job_data.get("blind_logo_path") if blind_eval else None
 
         files_res = sb.table("review_files").select("*").eq("job_id", job_id).execute()
         files = files_res.data or []
 
         client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         for review_file in files:
-            _process_file(sb, client, review_file, blind_keywords)
+            _process_file(sb, client, review_file, blind_keywords, logo_path)
 
         sb.table("proposal_review").update({
             "status": "completed",
