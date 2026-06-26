@@ -91,27 +91,31 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
             key_len = len(key)
 
             # 페이지 내 모든 발생 위치를 순회
+            # 직전 기록 위치에서 CONTEXT_RADIUS 이내 중복 발생은 건너뜀
+            CONTEXT_RADIUS = 80
             start = 0
-            seen_contexts: set[str] = set()
+            last_recorded_idx = -1
             while True:
                 idx = text_lower.find(key, start)
                 if idx == -1:
                     break
-                ctx_start = max(0, idx - 80)
-                ctx_end = min(len(text), idx + key_len + 80)
+                # 직전 기록과 context 창이 겹치면 건너뜀
+                if last_recorded_idx >= 0 and idx - last_recorded_idx < CONTEXT_RADIUS:
+                    start = idx + 1
+                    continue
+                ctx_start = max(0, idx - CONTEXT_RADIUS)
+                ctx_end = min(len(text), idx + key_len + CONTEXT_RADIUS)
                 context = text[ctx_start:ctx_end].strip()
-                # 동일 컨텍스트 중복 저장 방지
-                if context not in seen_contexts:
-                    seen_contexts.add(context)
-                    sb.table("review_results").insert({
-                        "id": str(uuid.uuid4()),
-                        "file_id": review_file["id"],
-                        "category": "blind",
-                        "detected_text": value,
-                        "suggestion": None,
-                        "page_number": page_num,
-                        "context": context,
-                    }).execute()
+                sb.table("review_results").insert({
+                    "id": str(uuid.uuid4()),
+                    "file_id": review_file["id"],
+                    "category": "blind",
+                    "detected_text": value,
+                    "suggestion": None,
+                    "page_number": page_num,
+                    "context": context,
+                }).execute()
+                last_recorded_idx = idx
                 start = idx + 1  # 다음 위치 탐색
 
 
