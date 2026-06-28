@@ -280,8 +280,12 @@ def start_job(
             mime_ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
             ext = mime_ext.get(req.blind_logo_mime, ".png")
         logo_path = os.path.abspath(os.path.join(logo_dir, f"logo{ext}"))
+        try:
+            logo_bytes = _b64.b64decode(req.blind_logo_b64)
+        except Exception:
+            raise HTTPException(status_code=400, detail="로고 이미지 데이터가 올바르지 않습니다.")
         with open(logo_path, "wb") as f:
-            f.write(_b64.b64decode(req.blind_logo_b64))
+            f.write(logo_bytes)
 
     sb.table("proposal_review").update({
         "status": "pending",

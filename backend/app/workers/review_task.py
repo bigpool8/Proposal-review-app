@@ -63,6 +63,8 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": _build_user_prompt(filename, pages)}],
     )
+    if not response.content or not hasattr(response.content[0], "text"):
+        return []
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         lines = [l for l in raw.split("\n") if not l.startswith("```")]

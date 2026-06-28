@@ -252,7 +252,7 @@ const DEFAULT_API = 'https://proposal-review-backend-production.up.railway.app';
   }
 })();
 let API = localStorage.getItem('api_url') || DEFAULT_API;
-let jobId = null, pollTmr = null;
+let jobId = null, pollTmr = null, pollAborted = false;
 let files = { qualitative:[], quantitative:[], presentation:[] };
 let sel = new Set();
 let blindEval = false;
@@ -310,6 +310,7 @@ function fileSummary(c) {
 }
 
 function show(page) {
+  if (page !== 'results') pollAborted = true;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
   if (page==='dashboard') loadDashboard();
@@ -619,12 +620,14 @@ async function doStart(){
 /* ── 결과 ────────────────────────────────────────────── */
 function openResults(id){
   jobId=id;
+  pollAborted=false;
   $('res-username').textContent=un();
   $('res-loading').style.display='block'; $('res-content').style.display='none'; $('res-failed').style.display='none';
   show('results'); poll();
 }
 
 async function poll(){
+  if(pollAborted) return;
   if(pollTmr) clearTimeout(pollTmr);
   try {
     const d=await api('/api/jobs/'+jobId+'/results');

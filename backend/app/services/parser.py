@@ -63,7 +63,8 @@ def _parse_pptx(file_path: str) -> tuple[list[dict], list[dict], Optional[str]]:
 
     prs = Presentation(file_path)
     pages, images = [], []
-    seen: set[tuple] = set()  # (img_hash, page_num) — 같은 페이지에 동일 이미지 중복 방지
+    seen: set[tuple] = set()    # (img_hash, page_num) — 슬라이드 고유 이미지 중복 방지
+    master_seen: set[int] = set()  # img_hash only — 마스터/레이아웃 전역 중복 방지
 
     def _add_shapes(shapes, page_num: int) -> None:
         for shape in shapes:
@@ -75,6 +76,17 @@ def _parse_pptx(file_path: str) -> tuple[list[dict], list[dict], Optional[str]]:
                     seen.add(key)
                     images.append(img)
 
+    def _add_master_shapes(shapes, page_num: int) -> None:
+        # 마스터/레이아웃 이미지는 전역 해시로 중복 방지 — 슬라이드마다 반복 추가 시 예산 소진 방지
+        for shape in shapes:
+            if len(images) >= MAX_IMAGES_PER_FILE:
+                return
+            for img in _extract_shape_images(shape, page_num):
+                h = hash(img["image_bytes"])
+                if h not in master_seen:
+                    master_seen.add(h)
+                    images.append(img)
+
     for idx, slide in enumerate(prs.slides, start=1):
         texts = []
         for shape in slide.shapes:
@@ -83,8 +95,8 @@ def _parse_pptx(file_path: str) -> tuple[list[dict], list[dict], Optional[str]]:
 
         _add_shapes(slide.shapes, idx)
         # 레이아웃·마스터에 있는 이미지도 각 슬라이드에 포함 (공통 로고 등)
-        _add_shapes(slide.slide_layout.shapes, idx)
-        _add_shapes(slide.slide_layout.slide_master.shapes, idx)
+        _add_master_shapes(slide.slide_layout.shapes, idx)
+        _add_master_shapes(slide.slide_layout.slide_master.shapes, idx)
 
     return pages, images, None
 
