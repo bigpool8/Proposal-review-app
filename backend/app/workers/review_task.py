@@ -87,6 +87,104 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
         return []
 
 
+COMPETITOR_SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
+주어진 텍스트에서 경쟁사 비교 및 비방 표현을 검출해야 합니다.
+
+검출 대상:
+1. 경쟁사 직접 비교: 특정 회사·제품을 직접 거론하며 우열을 비교하는 표현
+   예) "A사 솔루션과 달리", "경쟁사 제품 대비 2배 빠른", "타사 대비 우수한"
+2. 경쟁사 간접 비방: 특정 회사를 암시하거나 부정적으로 묘사하는 표현
+   예) "기존 솔루션들의 한계를 극복", "시장 내 타 제품의 문제점을 해결"
+3. 근거 없는 비교 우위 주장: 객관적 근거 없이 경쟁 우위를 주장하는 표현
+   예) "타사 대비 압도적인 성능", "경쟁사가 따라올 수 없는 기술력"
+
+검출 제외:
+- 자사 제품·서비스의 사실에 기반한 특장점 설명
+- 업계 전체 트렌드나 시장 환경에 대한 객관적 서술
+- 특정 회사를 지칭하지 않는 일반적 표현
+
+출력 형식은 반드시 아래 JSON 형식을 따르세요. JSON 외 다른 텍스트는 출력하지 마세요:
+{
+  "results": [
+    {
+      "category": "competitor",
+      "detected_text": "검출된 텍스트",
+      "suggestion": "객관적 표현으로 수정 제안",
+      "page_number": 페이지번호(정수),
+      "context": "검출된 텍스트를 포함한 전후 1~2문장"
+    }
+  ]
+}
+결과가 없으면 {"results": []} 반환."""
+
+
+def _call_competitor_llm(client: Anthropic, filename: str, pages: list[dict], competitor_keywords: list) -> list[dict]:
+    kw_names = [kw.get("value", "").strip() for kw in competitor_keywords if kw.get("value", "").strip()]
+    kw_note = ""
+    if kw_names:
+        kw_list = ", ".join(f'"{k}"' for k in kw_names)
+        kw_note = f"\n\n[주의] 다음 경쟁사명이 비교·비방 맥락에서 언급되면 반드시 검출하세요: {kw_list}"
+    start = pages[0]["page_number"]
+    end = pages[-1]["page_number"]
+    lines = [f"아래는 {filename}의 {start}~{end} 페이지 내용입니다. 검토해주세요.{kw_note}\n"]
+    for page in pages:
+        lines.append(f"[{page['page_number']}페이지]")
+        lines.append(page["text"] or "(내용 없음)")
+        lines.append("")
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4096,
+        system=COMPETITOR_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+    )
+    if not response.content or not hasattr(response.content[0], "text"):
+        return []
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+    try:
+        data = json.loads(raw)
+        return data.get("results", [])
+    except json.JSONDecodeError as e:
+        logger.warning("경쟁사 LLM JSON 파싱 실패 (%s): %s | raw: %.200s", filename, e, raw)
+        return []
+
+
+def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, competitor_keywords: list, pages: list[dict]) -> None:
+    """LLM으로 경쟁사 비교/비방 표현을 검출 (방식 A + B 혼합).
+
+    - 방식 A: 프롬프트 기반 자동 검출 (경쟁사명 없이도 동작)
+    - 방식 B: competitor_keywords 제공 시 해당 회사명이 비교·비방 맥락에서 언급되는지 LLM이 판단
+    """
+    chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
+    rows: list[dict] = []
+    if chunks:
+        with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
+            futures = {
+                pool.submit(_call_competitor_llm, client, review_file["original_filename"], chunk, competitor_keywords): chunk
+                for chunk in chunks
+            }
+            for fut in as_completed(futures):
+                try:
+                    items = fut.result()
+                except Exception as exc:
+                    logger.warning("경쟁사 LLM 청크 오류 (%s): %s", review_file["original_filename"], exc)
+                    items = []
+                for item in items:
+                    if item.get("category") == "competitor":
+                        rows.append({
+                            "id": str(uuid.uuid4()),
+                            "file_id": review_file["id"],
+                            "category": "competitor",
+                            "detected_text": item.get("detected_text", ""),
+                            "suggestion": item.get("suggestion"),
+                            "page_number": int(item.get("page_number", 0)),
+                            "context": item.get("context"),
+                        })
+    if rows:
+        sb.table("review_results").insert(rows).execute()
+
+
 def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
     """입력된 회사 식별 키워드를 텍스트에서 검색해 발견된 모든 위치를 저장."""
     rows: list[dict] = []
@@ -309,7 +407,7 @@ def _detect_blind_in_images(
         sb.table("review_results").insert(all_rows).execute()
 
 
-def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None) -> None:
+def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None, competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
     parsed = parse_file(
         review_file["storage_path"],
         review_file["mime_type"],
@@ -370,6 +468,10 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
     if blind_keywords or logo_path:
         _detect_blind_in_images(sb, client, review_file, blind_keywords, logo_path, images)
 
+    # 경쟁사 비교/비방 표현 검출
+    if competitor_eval:
+        _detect_competitor_expressions(sb, client, review_file, competitor_keywords or [], pages)
+
 
 def run_review_sync(job_id: str) -> None:
     sb = _get_sb()
@@ -380,7 +482,7 @@ def run_review_sync(job_id: str) -> None:
         }).eq("id", job_id).execute()
 
         job_res = sb.table("proposal_review").select(
-            "blind_eval,blind_keywords,blind_logo_path"
+            "blind_eval,blind_keywords,blind_logo_path,competitor_eval,competitor_keywords"
         ).eq("id", job_id).execute()
         job_data = job_res.data[0] if job_res.data else {}
         blind_eval = job_data.get("blind_eval", False)
@@ -390,6 +492,12 @@ def run_review_sync(job_id: str) -> None:
             if blind_eval else []
         )
         logo_path = job_data.get("blind_logo_path") if blind_eval else None
+        competitor_eval = job_data.get("competitor_eval", False)
+        raw_comp_keywords = job_data.get("competitor_keywords") or []
+        competitor_keywords = (
+            [kw for kw in raw_comp_keywords if kw.get("value", "").strip()]
+            if competitor_eval else []
+        )
 
         files_res = sb.table("review_files").select("*").eq("job_id", job_id).execute()
         files = files_res.data or []
@@ -401,14 +509,14 @@ def run_review_sync(job_id: str) -> None:
         if len(files) > 1:
             with ThreadPoolExecutor(max_workers=min(FILE_MAX_WORKERS, len(files))) as pool:
                 futures = [
-                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path)
+                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path, competitor_eval, competitor_keywords)
                     for f in files
                 ]
                 for fut in as_completed(futures):
                     fut.result()  # 예외가 있으면 여기서 전파 → except 블록으로
         else:
             for review_file in files:
-                _process_file(sb, client, review_file, blind_keywords, logo_path)
+                _process_file(sb, client, review_file, blind_keywords, logo_path, competitor_eval, competitor_keywords)
 
         sb.table("proposal_review").update({
             "status": "completed",

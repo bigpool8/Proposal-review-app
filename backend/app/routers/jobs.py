@@ -35,7 +35,7 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
         quantitative=sum(1 for f in files if f["proposal_type"] == "quantitative"),
         presentation=sum(1 for f in files if f["proposal_type"] == "presentation"),
     )
-    sup = typo = blind = 0
+    sup = typo = blind = comp = 0
     if with_results:
         for f in files:
             for r in (f.get("review_results") or []):
@@ -43,8 +43,10 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
                     sup += 1
                 elif r["category"] == "typo":
                     typo += 1
-                elif r["category"] == "blind":
+                elif r["category"] in ("blind", "blind_image"):
                     blind += 1
+                elif r["category"] == "competitor":
+                    comp += 1
     return JobResponse(
         id=job["id"],
         status=job["status"],
@@ -65,6 +67,7 @@ def _build_response(job: dict, *, with_results: bool = False) -> JobResponse:
         superlative_count=sup,
         typo_count=typo,
         blind_count=blind,
+        competitor_count=comp,
     )
 
 
@@ -344,6 +347,8 @@ def start_job(
         "blind_eval": req.blind_eval,
         "blind_keywords": req.blind_keywords,
         "blind_logo_path": logo_path,
+        "competitor_eval": req.competitor_eval,
+        "competitor_keywords": req.competitor_keywords if req.competitor_eval else [],
     }).eq("id", job_id).execute()
     background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}
@@ -374,6 +379,7 @@ def get_job_results(
     total_superlative = 0
     total_typo = 0
     total_blind = 0
+    total_competitor = 0
     files_with_issues = 0
     proposal_types = []
 
@@ -389,10 +395,12 @@ def get_job_results(
             sup = sum(1 for r in items if r["category"] == "superlative")
             typo = sum(1 for r in items if r["category"] == "typo")
             blind = sum(1 for r in items if r["category"] in ("blind", "blind_image"))
+            comp = sum(1 for r in items if r["category"] == "competitor")
             total_superlative += sup
             total_typo += typo
             total_blind += blind
-            if sup + typo + blind > 0:
+            total_competitor += comp
+            if sup + typo + blind + comp > 0:
                 files_with_issues += 1
             file_results.append({
                 "file_id": f["id"],
@@ -402,6 +410,7 @@ def get_job_results(
                 "superlative_count": sup,
                 "typo_count": typo,
                 "blind_count": blind,
+                "competitor_count": comp,
                 "results": [
                     {
                         "id": r["id"],
@@ -427,10 +436,13 @@ def get_job_results(
         "blind_eval": job.get("blind_eval", False),
         "blind_keywords": job.get("blind_keywords") or [],
         "has_logo": bool(job.get("blind_logo_path")),
+        "competitor_eval": job.get("competitor_eval", False),
+        "competitor_keywords": job.get("competitor_keywords") or [],
         "summary": {
             "total_superlative": total_superlative,
             "total_typo": total_typo,
             "total_blind": total_blind,
+            "total_competitor": total_competitor,
             "files_with_issues": files_with_issues,
         },
         "proposal_types": proposal_types,

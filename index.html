@@ -209,6 +209,18 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
     <div id="sec-presentation"></div>
     <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
       <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
+        <input type="checkbox" id="competitor-eval-chk" onchange="toggleCompetitorEval()" style="width:1.1rem;height:1.1rem;accent-color:#0ea5e9;cursor:pointer">
+        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">경쟁사 비교/비방 표현 검출</span>
+      </label>
+      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">경쟁사를 직접 비교하거나 비방하는 표현을 AI가 자동 검출합니다.</p>
+      <div id="competitor-eval-section" style="display:none;margin-top:.875rem">
+        <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.625rem">경쟁사명 입력 <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택 — 입력 시 해당 회사 언급도 함께 검출)</span></p>
+        <div id="competitor-keyword-list"></div>
+        <button class="btn btn-outline btn-sm" onclick="addCompetitorKeyword()" style="margin-top:.25rem;font-size:.8125rem">+ 경쟁사 추가</button>
+      </div>
+    </div>
+    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
+      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
         <input type="checkbox" id="blind-eval-chk" onchange="toggleBlindEval()" style="width:1.1rem;height:1.1rem;accent-color:#4f46e5;cursor:pointer">
         <span style="font-size:.9375rem;font-weight:600;color:#1f2937">블라인드 평가</span>
       </label>
@@ -300,6 +312,8 @@ let files = { qualitative:[], quantitative:[], presentation:[] };
 let sel = new Set();
 let blindEval = false;
 let blindKeywords = [];
+let competitorEval = false;
+let competitorKeywords = [];
 const LABELS = { qualitative:'정성제안서', quantitative:'정량제안서', presentation:'발표본' };
 const STATUS = {
   draft:      { t:'업로드 중',  c:'badge-gray' },
@@ -582,6 +596,34 @@ function hideModal(){ $('modal').style.display='none'; }
 /* ── 블라인드 평가 ────────────────────────────────────── */
 function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+function toggleCompetitorEval(){
+  competitorEval=$('competitor-eval-chk').checked;
+  $('competitor-eval-section').style.display=competitorEval?'block':'none';
+}
+
+function addCompetitorKeyword(){
+  competitorKeywords.push({value:''});
+  renderCompetitorKeywords();
+}
+
+function removeCompetitorKeyword(i){
+  competitorKeywords.splice(i,1);
+  renderCompetitorKeywords();
+}
+
+function updateCompetitorKeywordValue(i,v){ if(competitorKeywords[i]) competitorKeywords[i].value=v; }
+
+function renderCompetitorKeywords(){
+  const c=$('competitor-keyword-list');
+  if(!c) return;
+  c.innerHTML=competitorKeywords.map((k,i)=>`
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
+      <input type="text" value="${escAttr(k.value)}" placeholder="예: 삼성SDS, LG CNS" oninput="updateCompetitorKeywordValue(${i},this.value)" style="flex:1;padding:.35rem .75rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem">
+      <button onclick="removeCompetitorKeyword(${i})" style="padding:.25rem .5rem;color:#9ca3af;background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1">✕</button>
+    </div>
+  `).join('');
+}
+
 function toggleBlindEval(){
   blindEval=$('blind-eval-chk').checked;
   $('blind-eval-section').style.display=blindEval?'':'none';
@@ -658,7 +700,9 @@ async function doStart(){
         });
       }
     }
-    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logo_b64:logoB64,blind_logo_mime:logoMime})});
+    const isCompetitor=$('competitor-eval-chk')?.checked||false;
+    const compKws=isCompetitor?competitorKeywords.filter(k=>k.value.trim()).map(k=>({value:k.value.trim()})):[];
+    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logo_b64:logoB64,blind_logo_mime:logoMime,competitor_eval:isCompetitor,competitor_keywords:compKws})});
     hideModal(); openResults(jobId);
   }
   catch(e){ toast(e.message||'검토를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }
@@ -880,16 +924,19 @@ function renderResults(data){
   $('res-loading').style.display='none'; $('res-content').style.display='block';
   const s=data.summary;
   const hasBlind=data.blind_eval;
+  const hasCompetitor=data.competitor_eval;
   const sg=$('res-summary');
-  sg.style.gridTemplateColumns=hasBlind?'repeat(4,1fr)':'repeat(3,1fr)';
+  const colCount=3+(hasBlind?1:0)+(hasCompetitor?1:0);
+  sg.style.gridTemplateColumns=`repeat(${colCount},1fr)`;
   sg.innerHTML=`
     <div class="summary-card ${s.total_superlative===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">최상급 표현</p><p class="text-xs" style="margin-bottom:.375rem;color:#b45309">허위·과장 가능 문구</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
     <div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.25rem">오타</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
+    ${hasCompetitor?`<div class="summary-card ${(s.total_competitor||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">경쟁사 비교/비방</p><p class="text-xs" style="margin-bottom:.375rem;color:#0369a1">비교·비방 표현</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#0ea5e9">${s.total_competitor||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">이슈 파일</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개 파일에서 발견</p></div>`;
   const body=$('res-body'); body.innerHTML='';
   data.proposal_types.forEach(pt=>{
-    const tot=pt.files.reduce((n,f)=>n+f.superlative_count+f.typo_count+(f.blind_count||0),0);
+    const tot=pt.files.reduce((n,f)=>n+f.superlative_count+f.typo_count+(f.blind_count||0)+(f.competitor_count||0),0);
     const sec=document.createElement('div'); sec.style.marginBottom='1.5rem';
     sec.innerHTML=`<div class="flex items-center gap-2" style="margin-bottom:.75rem">
       <span class="bold" style="font-size:.9375rem">${pt.label}</span>
@@ -899,6 +946,7 @@ function renderResults(data){
     pt.files.forEach(f=>{
       const sups=f.results.filter(r=>r.category==='superlative');
       const typs=f.results.filter(r=>r.category==='typo');
+      const comps=f.results.filter(r=>r.category==='competitor');
       const blds=f.results.filter(r=>r.category==='blind');
       const bldImgs=f.results.filter(r=>r.category==='blind_image');
       let bHtml='';
@@ -919,6 +967,15 @@ function renderResults(data){
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
           ${r.suggestion?`<p class="text-xs mt-1" style="color:#dc2626">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
           </div>
+        </div>`);
+      }
+      if(comps.length){
+        bHtml+=`<div class="result-sec-hdr" style="background:#f0f9ff;border-bottom:1px solid #e0f2fe"><span class="dot" style="background:#0ea5e9;margin-top:0"></span><span class="text-sm bold" style="color:#0369a1">경쟁사 비교/비방 표현 (${comps.length}건)</span></div>`;
+        comps.forEach((r,i)=>bHtml+=`<div class="result-item" style="background:#f8fbff${i<comps.length-1?';border-bottom:1px solid rgba(14,165,233,.1)':''}">
+          <span class="pg-badge" style="color:#0284c7">[${r.page_number}p]</span>
+          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
+          ${r.suggestion?`<p class="text-xs mt-1" style="color:#0369a1">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
+          <span style="font-size:.75rem;font-weight:500;color:#0369a1;background:#e0f2fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">검토 필요</span></div>
         </div>`);
       }
       if(blds.length){
@@ -946,6 +1003,7 @@ function renderResults(data){
         <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:1rem">
           ${f.superlative_count>0?`<span class="text-xs" style="background:#fffbeb;color:#b45309;padding:.125rem .5rem;border-radius:9999px;font-weight:500">최상급 ${f.superlative_count}건</span>`:''}
           ${f.typo_count>0?`<span class="text-xs" style="background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:500">오타 ${f.typo_count}건</span>`:''}
+          ${(f.competitor_count||0)>0?`<span class="text-xs" style="background:#e0f2fe;color:#0369a1;padding:.125rem .5rem;border-radius:9999px;font-weight:500">경쟁사 ${f.competitor_count}건</span>`:''}
           ${(f.blind_count||0)>0?`<span class="text-xs" style="background:#f5f3ff;color:#6d28d9;padding:.125rem .5rem;border-radius:9999px;font-weight:500">블라인드 ${f.blind_count}건</span>`:''}
           <svg class="chevron open" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
         </div>

@@ -31,6 +31,7 @@ class JobResponse(BaseModel):
     superlative_count: int = 0
     typo_count: int = 0
     blind_count: int = 0
+    competitor_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -44,5 +45,7 @@ class FileUploadResponse(BaseModel):
 class StartJobRequest(BaseModel):
     blind_eval: bool = False
     blind_keywords: List[dict] = []
-    blind_logo_b64: Optional[str] = None   # base64-encoded logo image
-    blind_logo_mime: Optional[str] = None  # image/png, image/jpeg, …
+    blind_logo_b64: Optional[str] = None
+    blind_logo_mime: Optional[str] = None
+    competitor_eval: bool = False
+    competitor_keywords: List[dict] = []
