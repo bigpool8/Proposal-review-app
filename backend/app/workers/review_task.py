@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.services.parser import parse_file
 
 CHUNK_SIZE = 10
+MAX_IMAGE_BYTES = 4 * 1024 * 1024  # Claude API 이미지 크기 상한 (4MB)
 
 
 def _get_sb():
@@ -78,6 +79,7 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
 
 def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
     """입력된 회사 식별 키워드를 텍스트에서 검색해 발견된 모든 위치를 저장."""
+    rows: list[dict] = []
     for page in pages:
         text = page.get("text") or ""
         if not text:
@@ -108,7 +110,7 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
                 ctx_start = max(0, idx - CONTEXT_RADIUS)
                 ctx_end = min(len(text), idx + key_len + CONTEXT_RADIUS)
                 context = text[ctx_start:ctx_end].strip()
-                sb.table("review_results").insert({
+                rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind",
@@ -116,9 +118,12 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
                     "suggestion": None,
                     "page_number": page_num,
                     "context": context,
-                }).execute()
+                })
                 last_recorded_idx = idx
                 start = idx + 1  # 다음 위치 탐색
+
+    if rows:
+        sb.table("review_results").insert(rows).execute()
 
 
 def _detect_blind_in_images(
@@ -153,10 +158,13 @@ def _detect_blind_in_images(
     # text_cache: img_hash -> (found_kws, image_description)
     logo_cache: dict[int, tuple[bool, str]] = {}
     text_cache: dict[int, tuple[list[str], str]] = {}
+    rows: list[dict] = []
 
     for img in images:
         img_bytes = img.get("image_bytes") or b""
         if not img_bytes:
+            continue
+        if len(img_bytes) > MAX_IMAGE_BYTES:
             continue
         img_hash = hash(img_bytes)
         img_mime = img.get("mime_type", "image/png")
@@ -204,7 +212,7 @@ def _detect_blind_in_images(
 
             if is_logo:
                 logo_ctx = f"로고 이미지({logo_text}) 검출" if logo_text else "로고 이미지 검출"
-                sb.table("review_results").insert({
+                rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
@@ -212,7 +220,7 @@ def _detect_blind_in_images(
                     "suggestion": None,
                     "page_number": page_num,
                     "context": logo_ctx,
-                }).execute()
+                })
 
         # ── 2. 이미지 안에 회사명/대표자명 텍스트가 있는지 (로고 이미지 제외) ──
         if text_keywords and not is_logo:
@@ -256,7 +264,7 @@ def _detect_blind_in_images(
                     img_ctx = f"{image_description} 이미지에서 '{kw_text}' 텍스트 검출"
                 else:
                     img_ctx = f"이미지에서 '{kw_text}' 텍스트 검출"
-                sb.table("review_results").insert({
+                rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
@@ -264,7 +272,10 @@ def _detect_blind_in_images(
                     "suggestion": None,
                     "page_number": page_num,
                     "context": img_ctx,
-                }).execute()
+                })
+
+    if rows:
+        sb.table("review_results").insert(rows).execute()
 
 
 def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None) -> None:
@@ -288,11 +299,11 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
     images = parsed.get("images") or []
 
     # LLM 기반 검출 (최상급 표현 + 오타)
+    llm_rows: list[dict] = []
     for i in range(0, len(pages), CHUNK_SIZE):
         chunk = pages[i: i + CHUNK_SIZE]
-        items = _call_llm(client, review_file["original_filename"], chunk)
-        for item in items:
-            sb.table("review_results").insert({
+        for item in _call_llm(client, review_file["original_filename"], chunk):
+            llm_rows.append({
                 "id": str(uuid.uuid4()),
                 "file_id": review_file["id"],
                 "category": item.get("category", ""),
@@ -300,7 +311,9 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
                 "suggestion": item.get("suggestion"),
                 "page_number": int(item.get("page_number", 0)),
                 "context": item.get("context"),
-            }).execute()
+            })
+    if llm_rows:
+        sb.table("review_results").insert(llm_rows).execute()
 
     # 블라인드 평가: 텍스트 직접 검색
     if blind_keywords:
