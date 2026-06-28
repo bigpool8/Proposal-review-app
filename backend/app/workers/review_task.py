@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,11 @@ from app.services.parser import parse_file
 
 CHUNK_SIZE = 10
 MAX_IMAGE_BYTES = 4 * 1024 * 1024  # Claude API 이미지 크기 상한 (4MB)
+
+# 동시 스레드 수 — Claude API rate limit과 Railway 메모리를 감안해 보수적으로 설정
+LLM_MAX_WORKERS = 3    # 텍스트 청크 병렬 LLM 호출
+IMAGE_MAX_WORKERS = 4  # 이미지 병렬 Claude vision 호출
+FILE_MAX_WORKERS = 3   # 파일 간 병렬 처리
 
 
 def _get_sb():
@@ -138,7 +144,12 @@ def _detect_blind_in_images(
     logo_path: str | None,
     images: list[dict],
 ) -> None:
-    """추출된 이미지에서 Claude vision으로 회사 식별정보를 검출."""
+    """추출된 이미지에서 Claude vision으로 회사 식별정보를 검출.
+
+    각 이미지에 대한 Claude API 호출을 ThreadPoolExecutor로 병렬 실행한다.
+    logo_cache / text_cache는 CPython GIL 하에서 dict 단순 읽기·쓰기가 원자적이므로
+    별도 Lock 없이 공유한다 (동일 hash 이미지의 경우 최악에도 중복 API 호출 1회 수준).
+    """
     if not images:
         return
 
@@ -158,30 +169,33 @@ def _detect_blind_in_images(
         return
 
     # 동일 이미지에 대해 Claude API 중복 호출 방지 (레이아웃 공통 이미지 등)
-    # logo_cache: img_hash -> (is_logo, logo_text)  logo_text는 로고에 표시된 텍스트
+    # logo_cache: img_hash -> (is_logo, logo_text)
     # text_cache: img_hash -> (found_kws, image_description)
     logo_cache: dict[int, tuple[bool, str]] = {}
     text_cache: dict[int, tuple[list[str], str]] = {}
-    rows: list[dict] = []
 
-    for img in images:
+    def _process_img(img: dict) -> list[dict]:
+        """단일 이미지에 대해 로고 및 텍스트 검출을 수행하고 결과 행을 반환."""
         img_bytes = img.get("image_bytes") or b""
-        if not img_bytes:
-            continue
-        if len(img_bytes) > MAX_IMAGE_BYTES:
-            continue
+        if not img_bytes or len(img_bytes) > MAX_IMAGE_BYTES:
+            return []
+
         img_hash = hash(img_bytes)
         img_mime = img.get("mime_type", "image/png")
         page_num = img["page_number"]
+        # img_b64는 실제 API 호출이 필요할 때 한 번만 계산 (logo + text 양쪽 재사용)
+        img_b64: str | None = None
+        local_rows: list[dict] = []
 
-        # ── 1. 로고 이미지 시각적 유사도 비교 (먼저 확인) ──────────────────
+        # ── 1. 로고 이미지 시각적 유사도 비교 ──────────────────
         is_logo = False
         logo_text = ""
         if logo_b64:
             if img_hash in logo_cache:
                 is_logo, logo_text = logo_cache[img_hash]
             else:
-                img_b64 = base64.b64encode(img_bytes).decode()
+                if img_b64 is None:
+                    img_b64 = base64.b64encode(img_bytes).decode()
                 try:
                     resp = client.messages.create(
                         model="claude-sonnet-4-6",
@@ -216,7 +230,7 @@ def _detect_blind_in_images(
 
             if is_logo:
                 logo_ctx = f"로고 이미지({logo_text}) 검출" if logo_text else "로고 이미지 검출"
-                rows.append({
+                local_rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
@@ -233,7 +247,8 @@ def _detect_blind_in_images(
             else:
                 found_kws = []
                 image_description = ""
-                img_b64 = base64.b64encode(img_bytes).decode()
+                if img_b64 is None:
+                    img_b64 = base64.b64encode(img_bytes).decode()
                 kw_list = ", ".join(f'"{k}"' for k in text_keywords)
                 try:
                     resp = client.messages.create(
@@ -268,7 +283,7 @@ def _detect_blind_in_images(
                     img_ctx = f"{image_description} 이미지에서 '{kw_text}' 텍스트 검출"
                 else:
                     img_ctx = f"이미지에서 '{kw_text}' 텍스트 검출"
-                rows.append({
+                local_rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind_image",
@@ -278,8 +293,20 @@ def _detect_blind_in_images(
                     "context": img_ctx,
                 })
 
-    if rows:
-        sb.table("review_results").insert(rows).execute()
+        return local_rows
+
+    # 이미지별 Claude API 호출을 병렬 실행
+    all_rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=IMAGE_MAX_WORKERS) as pool:
+        futures = [pool.submit(_process_img, img) for img in images]
+        for fut in as_completed(futures):
+            try:
+                all_rows.extend(fut.result())
+            except Exception as exc:
+                logger.warning("이미지 처리 중 오류: %s", exc)
+
+    if all_rows:
+        sb.table("review_results").insert(all_rows).execute()
 
 
 def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None) -> None:
@@ -302,20 +329,36 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
     pages = parsed["pages"]
     images = parsed.get("images") or []
 
-    # LLM 기반 검출 (최상급 표현 + 오타)
+    # LLM 기반 검출 (최상급 표현 + 오타) — 청크 병렬 처리
+    # 각 청크는 독립적이므로 ThreadPoolExecutor로 동시 호출 가능.
+    # 결과 수집은 메인 스레드에서만 이루어지므로 llm_rows 동시 접근 없음.
+    chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
     llm_rows: list[dict] = []
-    for i in range(0, len(pages), CHUNK_SIZE):
-        chunk = pages[i: i + CHUNK_SIZE]
-        for item in _call_llm(client, review_file["original_filename"], chunk):
-            llm_rows.append({
-                "id": str(uuid.uuid4()),
-                "file_id": review_file["id"],
-                "category": item.get("category", ""),
-                "detected_text": item.get("detected_text", ""),
-                "suggestion": item.get("suggestion"),
-                "page_number": int(item.get("page_number", 0)),
-                "context": item.get("context"),
-            })
+    if chunks:
+        with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
+            futures = {
+                pool.submit(_call_llm, client, review_file["original_filename"], chunk): chunk
+                for chunk in chunks
+            }
+            for fut in as_completed(futures):
+                try:
+                    items = fut.result()
+                except Exception as exc:
+                    logger.warning(
+                        "LLM 청크 처리 오류 (%s): %s",
+                        review_file["original_filename"], exc,
+                    )
+                    items = []
+                for item in items:
+                    llm_rows.append({
+                        "id": str(uuid.uuid4()),
+                        "file_id": review_file["id"],
+                        "category": item.get("category", ""),
+                        "detected_text": item.get("detected_text", ""),
+                        "suggestion": item.get("suggestion"),
+                        "page_number": int(item.get("page_number", 0)),
+                        "context": item.get("context"),
+                    })
     if llm_rows:
         sb.table("review_results").insert(llm_rows).execute()
 
@@ -352,8 +395,20 @@ def run_review_sync(job_id: str) -> None:
         files = files_res.data or []
 
         client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        for review_file in files:
-            _process_file(sb, client, review_file, blind_keywords, logo_path)
+
+        # 파일이 2개 이상이면 ThreadPoolExecutor로 병렬 처리
+        # supabase-py와 anthropic SDK 모두 httpx 기반이므로 멀티스레드 안전
+        if len(files) > 1:
+            with ThreadPoolExecutor(max_workers=min(FILE_MAX_WORKERS, len(files))) as pool:
+                futures = [
+                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path)
+                    for f in files
+                ]
+                for fut in as_completed(futures):
+                    fut.result()  # 예외가 있으면 여기서 전파 → except 블록으로
+        else:
+            for review_file in files:
+                _process_file(sb, client, review_file, blind_keywords, logo_path)
 
         sb.table("proposal_review").update({
             "status": "completed",

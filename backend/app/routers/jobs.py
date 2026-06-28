@@ -3,15 +3,21 @@ import os
 import urllib.parse
 import uuid
 from datetime import datetime as _dt
+from typing import List
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from supabase import Client
 
 from app.database import get_supabase
 from app.routers.auth import get_current_user
 from app.schemas.job import FileCounts, FileResponse, FileUploadResponse, JobResponse, StartJobRequest
+
+
+class BatchDeleteRequest(BaseModel):
+    job_ids: List[str]
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -109,6 +115,52 @@ def list_jobs(
         "*, review_files(*, review_results(*))"
     ).eq("user_id", current_user["id"]).order("created_at", desc=True).execute()
     return [_build_response(j, with_results=True) for j in (res.data or [])]
+
+
+# ── 검토 건 일괄 삭제 ─────────────────────────────────────
+@router.post("/batch-delete")
+def batch_delete_jobs(
+    req: BatchDeleteRequest,
+    current_user: dict = Depends(get_current_user),
+    sb: Client = Depends(get_supabase),
+):
+    """빈 draft 잡 등을 한 번의 SELECT + 한 번의 DELETE로 일괄 삭제.
+
+    프론트엔드 loadDashboard()에서 파일 없는 잡을 정리할 때 N개의 개별 요청 대신
+    이 엔드포인트 1회 호출로 처리한다.
+    """
+    if not req.job_ids:
+        return {"deleted": 0}
+
+    # 소유권 확인 및 파일 경로 일괄 조회 (DB 1회)
+    res = sb.table("proposal_review").select(
+        "id, user_id, review_files(storage_path)"
+    ).in_("id", req.job_ids).eq("user_id", current_user["id"]).execute()
+    owned_jobs = res.data or []
+    if not owned_jobs:
+        return {"deleted": 0}
+
+    # 로컬 파일 정리
+    for job in owned_jobs:
+        for f in (job.get("review_files") or []):
+            try:
+                path = f.get("storage_path") or ""
+                if path and os.path.exists(path):
+                    os.remove(path)
+                parent = os.path.dirname(path) if path else ""
+                if parent and os.path.isdir(parent) and not os.listdir(parent):
+                    os.rmdir(parent)
+            except OSError:
+                pass
+
+    # DB 일괄 삭제 — CASCADE로 review_files, review_results 자동 삭제 (DB 1회)
+    owned_ids = [j["id"] for j in owned_jobs]
+    try:
+        sb.table("proposal_review").delete().in_("id", owned_ids).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"일괄 삭제 중 오류: {str(exc)[:200]}")
+
+    return {"deleted": len(owned_ids)}
 
 
 # ── 검토 건 상세 ──────────────────────────────────────────

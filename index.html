@@ -397,8 +397,13 @@ async function loadDashboard() {
   $('d-loading').style.display='block'; $('d-list').innerHTML=''; $('d-empty').style.display='none';
   try {
     let jobs = await api('/api/jobs');
-    const empty = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation===0);
-    await Promise.allSettled(empty.map(j=>api('/api/jobs/'+j.id+'/delete',{method:'POST'})));
+    // 파일 없는 draft 잡을 단일 batch-delete 요청으로 정리 (기존 N개 개별 요청 → 1회)
+    const emptyIds = jobs
+      .filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation===0)
+      .map(j=>j.id);
+    if (emptyIds.length > 0) {
+      await api('/api/jobs/batch-delete', {method:'POST', body:JSON.stringify({job_ids:emptyIds})}).catch(()=>{});
+    }
     jobs = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation>0);
     renderJobs(jobs);
     if (jobs.some(j=>j.status==='pending'||j.status==='processing')) pollTmr=setTimeout(loadDashboard,10000);
