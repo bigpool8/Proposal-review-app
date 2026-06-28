@@ -177,7 +177,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
         <span class="text-sm text-gray">전체 선택</span>
         <button class="btn btn-danger btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
       </div>
-      <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 새 검토 요청</button>
+      <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 제안서 검토 요청</button>
     </div>
     <div id="d-loading" class="text-center" style="padding:5rem 0"><div class="spinner spinner-lg" style="display:inline-block"></div><p class="text-sm text-gray" style="margin-top:.75rem">이력을 불러오는 중...</p></div>
     <div id="d-empty" style="display:none">
@@ -506,10 +506,10 @@ async function deleteSelected(){
 }
 
 async function createJob(){
-  setBtn('new-btn',true,'+ 새 검토 요청','생성 중...');
+  setBtn('new-btn',true,'+ 제안서 검토 요청','생성 중...');
   try { const d=await api('/api/jobs',{method:'POST'}); openUpload(d.job_id); }
   catch(e){ toast(e.message||'검토 요청을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }
-  finally { setBtn('new-btn',false,'+ 새 검토 요청','생성 중...'); }
+  finally { setBtn('new-btn',false,'+ 제안서 검토 요청','생성 중...'); }
 }
 
 /* ── 업로드 ──────────────────────────────────────────── */
