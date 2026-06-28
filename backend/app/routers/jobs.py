@@ -621,6 +621,8 @@ def retry_job(
     sb.table("proposal_review").update({
         "status": "pending",
         "error_message": None,
+        "started_at": None,
+        "completed_at": None,
     }).eq("id", job_id).execute()
     background_tasks.add_task(run_review_sync, job_id)
     return {"job_id": job_id, "status": "pending"}

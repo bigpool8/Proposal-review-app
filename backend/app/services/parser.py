@@ -163,7 +163,10 @@ def _parse_pdf(file_path: str) -> tuple[list[dict], list[dict], Optional[str]]:
             pages.append({"page_number": idx, "text": text})
 
         if empty_count / total >= 0.8:
-            return [], [], "텍스트 레이어를 찾을 수 없습니다. 스캔된 PDF일 수 있습니다."
+            non_empty = [p for p in pages if p["text"].strip()]
+            if not non_empty:
+                return [], [], "텍스트 레이어를 찾을 수 없습니다. 스캔된 PDF일 수 있습니다."
+            return non_empty, _extract_pdf_images(file_path), "일부 페이지에 텍스트가 없습니다. 스캔 페이지가 포함되어 있을 수 있습니다."
 
     images = _extract_pdf_images(file_path)
     return pages, images, None

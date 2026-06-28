@@ -1,8 +1,11 @@
 import base64
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from anthropic import Anthropic
 from supabase import create_client
@@ -73,7 +76,8 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]
     try:
         data = json.loads(raw)
         return data.get("results", [])
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.warning("LLM JSON 파싱 실패 (%s): %s | raw: %.200s", filename, e, raw)
         return []
 
 
@@ -120,7 +124,7 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
                     "context": context,
                 })
                 last_recorded_idx = idx
-                start = idx + 1  # 다음 위치 탐색
+                start = idx + key_len  # 현재 매치 끝부터 다음 탐색
 
     if rows:
         sb.table("review_results").insert(rows).execute()
