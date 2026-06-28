@@ -13,7 +13,6 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "https://proposal-review-app-1.vercel.app",
-        "null",  # file:// protocol (app.html opened directly in browser)
     ],
     allow_credentials=True,
     allow_methods=["*"],
