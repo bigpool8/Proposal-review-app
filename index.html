@@ -196,9 +196,11 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 <div id="page-upload" class="page">
   <nav>
     <span style="font-size:1.25rem;font-weight:700;color:#7c3aed">AI 제안서 검증 시스템</span>
-    <div style="position:absolute;left:50%;transform:translateX(-50%);font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 업로드</div>
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 업로드</span>
+      <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="show('dashboard')">검토 이력</button>
+    </div>
     <div class="flex items-center gap-3">
-      <button class="btn btn-outline btn-sm" onclick="show('dashboard')">검토 이력</button>
       <span id="u-username" class="bold" style="color:#065f46"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
@@ -240,11 +242,11 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 <div id="page-results" class="page">
   <nav>
     <span style="font-size:1.25rem;font-weight:700;color:#7c3aed">AI 제안서 검증 시스템</span>
-    <div id="res-nav-title" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:.5rem">
+    <div id="res-nav-title" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:.75rem">
       <span style="font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 검토 결과</span>
+      <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="show('dashboard')">검토 이력</button>
     </div>
     <div class="flex items-center gap-3">
-      <button class="btn btn-outline btn-sm" onclick="show('dashboard')">검토 이력</button>
       <span id="res-username" class="bold" style="color:#065f46"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
