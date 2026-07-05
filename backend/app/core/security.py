@@ -9,15 +9,20 @@ from app.core.config import settings
 
 
 def validate_password(password: str) -> bool:
+    # bcrypt는 72바이트를 넘는 비밀번호를 조용히 자르지 않고 예외를 던지므로 상한도 검사한다.
     return (
-        len(password) >= 6
+        6 <= len(password.encode()) <= 72
         and bool(re.search(r"[A-Za-z]", password))
         and bool(re.search(r"\d", password))
     )
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except ValueError:
+        # 72바이트 초과 등 bcrypt가 거부하는 입력 — 인증 실패로 처리
+        return False
 
 
 def get_password_hash(password: str) -> str:

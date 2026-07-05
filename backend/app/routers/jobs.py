@@ -114,8 +114,11 @@ def list_jobs(
     current_user: dict = Depends(get_current_user),
     sb: Client = Depends(get_supabase),
 ):
+    # 대시보드는 배지/카운트만 표시하므로 review_results는 category 컬럼만,
+    # review_files도 목록 렌더링에 쓰이는 컬럼만 선택해 폴링 응답 크기를 줄인다
+    # (detected_text/suggestion/context 등 상세 필드는 결과 상세 화면에서만 필요).
     res = sb.table("proposal_review").select(
-        "*, review_files(*, review_results(*))"
+        "*, review_files(id, proposal_type, original_filename, file_size_bytes, uploaded_at, review_results(category))"
     ).eq("user_id", current_user["id"]).order("created_at", desc=True).execute()
     return [_build_response(j, with_results=True) for j in (res.data or [])]
 

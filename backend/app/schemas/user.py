@@ -30,6 +30,5 @@ class Token(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    username: str
     current_password: str
     new_password: str

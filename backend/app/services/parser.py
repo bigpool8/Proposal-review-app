@@ -16,8 +16,10 @@ _MIME_EXT = {
     "application/pdf": ".pdf",
 }
 
-MIN_IMAGE_BYTES = 3_000  # 3 KB 미만 아이콘·불릿 이미지 제외 (로고 등 소형 PNG 포함)
-MAX_IMAGES_PER_FILE = 40  # 파일당 최대 처리 이미지 수
+MIN_IMAGE_BYTES = 1_000  # 1 KB 미만 아이콘·불릿 이미지 제외
+MAX_IMAGES_PER_FILE = 40  # 파일당 최대 처리 이미지 수 (신규 콘텐츠/마스터 이미지 종류당 1회분 예산)
+MAX_MASTER_LOGO_REPEATS = 60  # 이미 감지된 마스터/레이아웃 로고가 슬라이드마다 반복 등록될 때의 별도 예산
+MAX_PDF_PAGE_RENDERS = 30  # PDF 페이지 렌더 최대 수 (벡터 로고 보완용)
 
 
 # ── PPTX ──────────────────────────────────────────────────────────────────────
@@ -63,28 +65,46 @@ def _parse_pptx(file_path: str) -> tuple[list[dict], list[dict], Optional[str]]:
 
     prs = Presentation(file_path)
     pages, images = [], []
-    seen: set[tuple] = set()    # (img_hash, page_num) — 슬라이드 고유 이미지 중복 방지
-    master_seen: set[int] = set()  # img_hash only — 마스터/레이아웃 전역 중복 방지
+    seen: set[tuple] = set()          # (img_hash, page_num) — 슬라이드별 중복 추가 방지
+    seen_hashes: set[int] = set()      # img_hash — 콘텐츠/마스터 통틀어 이미 예산을 소모한 이미지인지 판단
+    master_repeat_count = 0
 
     def _add_shapes(shapes, page_num: int) -> None:
         for shape in shapes:
             if len(images) >= MAX_IMAGES_PER_FILE:
                 return
             for img in _extract_shape_images(shape, page_num):
-                key = (hash(img["image_bytes"]), page_num)
+                h = hash(img["image_bytes"])
+                key = (h, page_num)
                 if key not in seen:
                     seen.add(key)
+                    seen_hashes.add(h)
                     images.append(img)
 
     def _add_master_shapes(shapes, page_num: int) -> None:
-        # 마스터/레이아웃 이미지는 전역 해시로 중복 방지 — 슬라이드마다 반복 추가 시 예산 소진 방지
+        # 마스터/레이아웃 이미지도 슬라이드별로 추가 — 같은 로고라도 슬라이드마다 page_num이 달라야
+        # 올바른 페이지에 검출 결과가 기록된다.
+        # 단, 같은 마스터 로고가 슬라이드 수만큼 반복되면 콘텐츠 이미지 예산(MAX_IMAGES_PER_FILE)을
+        # 잠식하므로, 최초 발견 시에만 콘텐츠 예산을 사용하고 이후 반복 등장은 별도의
+        # MAX_MASTER_LOGO_REPEATS 예산으로 관리한다.
+        nonlocal master_repeat_count
         for shape in shapes:
-            if len(images) >= MAX_IMAGES_PER_FILE:
-                return
             for img in _extract_shape_images(shape, page_num):
                 h = hash(img["image_bytes"])
-                if h not in master_seen:
-                    master_seen.add(h)
+                key = (h, page_num)
+                if key in seen:
+                    continue
+                if h in seen_hashes:
+                    if master_repeat_count >= MAX_MASTER_LOGO_REPEATS:
+                        continue
+                    seen.add(key)
+                    images.append(img)
+                    master_repeat_count += 1
+                else:
+                    if len(images) >= MAX_IMAGES_PER_FILE:
+                        continue
+                    seen.add(key)
+                    seen_hashes.add(h)
                     images.append(img)
 
     for idx, slide in enumerate(prs.slides, start=1):
@@ -181,6 +201,8 @@ def _extract_pdf_images(file_path: str) -> list[dict]:
     images = []
     try:
         doc = fitz.open(file_path)
+
+        # 1. 임베드된 래스터 이미지 추출
         for page_idx, page in enumerate(doc, start=1):
             for img_info in page.get_images(full=False):
                 if len(images) >= MAX_IMAGES_PER_FILE:
@@ -198,6 +220,27 @@ def _extract_pdf_images(file_path: str) -> list[dict]:
                         })
                 except Exception:
                     continue
+
+        # 2. 페이지 렌더링 추가 — 벡터 로고·Form XObject 내 이미지를 보완
+        #    임베드 추출로 감지되지 않는 로고를 페이지 전체 이미지로 재확인.
+        render_count = 0
+        for page_idx, page in enumerate(doc, start=1):
+            if render_count >= MAX_PDF_PAGE_RENDERS:
+                break
+            try:
+                mat = fitz.Matrix(1.0, 1.0)  # 72 DPI — 로고 식별에 충분한 해상도
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                blob = pix.tobytes("png")
+                if blob:
+                    images.append({
+                        "page_number": page_idx,
+                        "image_bytes": blob,
+                        "mime_type": "image/png",
+                        "is_page_render": True,
+                    })
+                    render_count += 1
+            except Exception:
+                continue
     except Exception:
         pass
     return images

@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routers import auth, jobs
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="제안서 검토 API")
 
@@ -25,6 +29,7 @@ app.include_router(jobs.router)
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url)
     return JSONResponse(status_code=500, content={"detail": "서버 오류가 발생했습니다."})
 
 

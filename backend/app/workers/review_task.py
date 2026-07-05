@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -9,9 +10,9 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 from anthropic import Anthropic
-from supabase import create_client
 
 from app.core.config import settings
+from app.database import get_supabase
 from app.services.parser import parse_file
 
 CHUNK_SIZE = 10
@@ -24,7 +25,9 @@ FILE_MAX_WORKERS = 3   # 파일 간 병렬 처리
 
 
 def _get_sb():
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+    # get_supabase()는 lru_cache로 캐시된 싱글턴 Client를 반환 — 매 job마다
+    # 새 httpx.Client(및 커넥션 풀)를 만들지 않고 재사용한다.
+    return get_supabase()
 
 
 SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
@@ -185,9 +188,51 @@ def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, com
         sb.table("review_results").insert(rows).execute()
 
 
+def _expand_keyword(value: str) -> list[str]:
+    """ASCII↔한글 경계에서 복합 키워드를 하위 키워드로 분리.
+
+    'LG유플러스' → ['LG', '유플러스']
+    '삼성SDS'    → ['삼성', 'SDS']
+    길이 1 이하이거나 원본과 동일한 조각은 제외.
+    """
+    parts = re.split(r'(?<=[A-Za-z0-9])(?=[가-힣])|(?<=[가-힣])(?=[A-Za-z0-9])', value)
+    return [p for p in parts if len(p) > 1 and p != value]
+
+
 def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: list[dict]) -> None:
-    """입력된 회사 식별 키워드를 텍스트에서 검색해 발견된 모든 위치를 저장."""
+    """입력된 회사 식별 키워드를 텍스트에서 검색해 발견된 모든 위치를 저장.
+
+    복합 키워드(예: 'LG유플러스')는 ASCII/한글 경계로 분리해 하위 키워드('LG', '유플러스')도
+    함께 검색한다. 단, 하위 키워드의 발생 위치가 그 하위 키워드를 파생시킨 원본 키워드 범위 내에
+    완전히 포함되면 중복으로 간주하여 건너뛴다.
+
+    같은 하위 키워드가 서로 다른 원본 키워드에서 파생될 수 있으므로(예: 'LG유플러스'와 'LG전자'가
+    함께 입력되면 둘 다 'LG'를 파생시킴), 검색은 하위 키워드 텍스트 단위로 한 번만 수행하고
+    파생시킨 모든 원본 키워드의 발생 범위를 합쳐서 제외 판정에 사용한다. 이렇게 하지 않으면
+    동일한 위치가 원본 키워드 개수만큼 중복으로 기록된다.
+    """
+    CONTEXT_RADIUS = 80
     rows: list[dict] = []
+
+    # 키워드 검색 계획 수립: 실제 검색할 텍스트(소문자) -> 표시용 원문 / 원본 여부 / 제외 대상 원본 키워드
+    search_terms: dict[str, dict] = {}
+    for kw in blind_keywords:
+        value = kw.get("value", "").strip()
+        if not value:
+            continue
+        key = value.lower()
+        entry = search_terms.setdefault(key, {"text": value, "is_primary": False, "excluded_by": set()})
+        entry["is_primary"] = True
+        entry["text"] = value
+
+        for sub in _expand_keyword(value):
+            sub_key = sub.lower()
+            sub_entry = search_terms.setdefault(sub_key, {"text": sub, "is_primary": False, "excluded_by": set()})
+            sub_entry["excluded_by"].add(key)
+
+    if not search_terms:
+        return
+
     for page in pages:
         text = page.get("text") or ""
         if not text:
@@ -195,40 +240,57 @@ def _search_blind_keywords(sb, review_file: dict, blind_keywords: list, pages: l
         text_lower = text.lower()
         page_num = page["page_number"]
 
-        for kw in blind_keywords:
-            value = kw.get("value", "").strip()
-            if not value:
+        # 원본(primary) 키워드들의 발생 범위 — 하위 키워드 중복 제거에 사용
+        primary_ranges: dict[str, list[tuple[int, int]]] = {}
+        for key, entry in search_terms.items():
+            if not entry["is_primary"]:
                 continue
-            key = value.lower()
-            key_len = len(key)
+            ranges = []
+            p_start = 0
+            while True:
+                idx = text_lower.find(key, p_start)
+                if idx == -1:
+                    break
+                ranges.append((idx, idx + len(key)))
+                p_start = idx + len(key)
+            primary_ranges[key] = ranges
 
-            # 페이지 내 모든 발생 위치를 순회
-            # 직전 기록 위치에서 CONTEXT_RADIUS 이내 중복 발생은 건너뜀
-            CONTEXT_RADIUS = 80
+        for key, entry in search_terms.items():
+            kw_text = entry["text"]
+            key_len = len(key)
+            exclude_ranges = [r for pk in entry["excluded_by"] for r in primary_ranges.get(pk, [])]
             start = 0
             last_recorded_idx = -1
+
             while True:
                 idx = text_lower.find(key, start)
                 if idx == -1:
                     break
+
+                # 이 키워드를 파생시킨 원본 키워드 범위 내에 완전히 포함되면 건너뜀
+                end_idx = idx + key_len
+                if exclude_ranges and any(ps <= idx and end_idx <= pe for ps, pe in exclude_ranges):
+                    start = idx + 1
+                    continue
+
                 # 직전 기록과 context 창이 겹치면 건너뜀
                 if last_recorded_idx >= 0 and idx - last_recorded_idx < CONTEXT_RADIUS:
                     start = idx + 1
                     continue
+
                 ctx_start = max(0, idx - CONTEXT_RADIUS)
                 ctx_end = min(len(text), idx + key_len + CONTEXT_RADIUS)
-                context = text[ctx_start:ctx_end].strip()
                 rows.append({
                     "id": str(uuid.uuid4()),
                     "file_id": review_file["id"],
                     "category": "blind",
-                    "detected_text": value,
+                    "detected_text": kw_text,
                     "suggestion": None,
                     "page_number": page_num,
-                    "context": context,
+                    "context": text[ctx_start:ctx_end].strip(),
                 })
                 last_recorded_idx = idx
-                start = idx + key_len  # 현재 매치 끝부터 다음 탐색
+                start = idx + key_len
 
     if rows:
         sb.table("review_results").insert(rows).execute()
@@ -271,16 +333,26 @@ def _detect_blind_in_images(
     # text_cache: img_hash -> (found_kws, image_description)
     logo_cache: dict[int, tuple[bool, str]] = {}
     text_cache: dict[int, tuple[list[str], str]] = {}
+    # 용량 초과로 검출을 건너뛴 페이지 — list.append는 GIL 하에서 원자적이므로 Lock 불필요
+    oversized_pages: list[int] = []
 
     def _process_img(img: dict) -> list[dict]:
         """단일 이미지에 대해 로고 및 텍스트 검출을 수행하고 결과 행을 반환."""
         img_bytes = img.get("image_bytes") or b""
-        if not img_bytes or len(img_bytes) > MAX_IMAGE_BYTES:
+        if not img_bytes:
+            return []
+        if len(img_bytes) > MAX_IMAGE_BYTES:
+            logger.warning(
+                "이미지 용량 초과로 블라인드 검출 제외 (%s, page %s, %d bytes)",
+                review_file.get("original_filename"), img.get("page_number"), len(img_bytes),
+            )
+            oversized_pages.append(img["page_number"])
             return []
 
         img_hash = hash(img_bytes)
         img_mime = img.get("mime_type", "image/png")
         page_num = img["page_number"]
+        is_page_render = img.get("is_page_render", False)
         # img_b64는 실제 API 호출이 필요할 때 한 번만 계산 (logo + text 양쪽 재사용)
         img_b64: str | None = None
         local_rows: list[dict] = []
@@ -295,33 +367,62 @@ def _detect_blind_in_images(
                 if img_b64 is None:
                     img_b64 = base64.b64encode(img_bytes).decode()
                 try:
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=128,
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
-                                {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
-                                {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
-                                {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
-                                {"type": "text", "text": (
-                                    "두 번째 이미지가 첫 번째 이미지(참조 로고)와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
-                                    "주의: 두 번째 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
-                                    "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
-                                    "로고인 경우 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
-                                    "JSON으로만 답변 (다른 텍스트 금지):\n"
-                                    '{"is_same_logo": true, "confidence": "high", "logo_text": "LG U+"}'
-                                )},
-                            ],
-                        }],
-                    )
-                    raw = resp.content[0].text.strip()
-                    if raw.startswith("```"):
-                        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
-                    data = json.loads(raw)
-                    is_logo = bool(data.get("is_same_logo") and data.get("confidence") in ("high", "medium"))
-                    logo_text = data.get("logo_text", "").strip() if is_logo else ""
+                    if is_page_render:
+                        # 페이지 전체 렌더 이미지: 페이지 어딘가에 로고가 있는지 확인
+                        resp = client.messages.create(
+                            model="claude-sonnet-4-6",
+                            max_tokens=128,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
+                                    {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
+                                    {"type": "text", "text": "다음은 문서 페이지 전체 이미지입니다:"},
+                                    {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
+                                    {"type": "text", "text": (
+                                        "문서 페이지 어딘가에 참조 로고(또는 그 변형)가 포함되어 있습니까?\n"
+                                        "로고가 있다면 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
+                                        "JSON으로만 답변 (다른 텍스트 금지):\n"
+                                        '{"contains_logo": true, "confidence": "high", "logo_text": "LG U+"}'
+                                    )},
+                                ],
+                            }],
+                        )
+                        raw = resp.content[0].text.strip()
+                        if raw.startswith("```"):
+                            raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                        data = json.loads(raw)
+                        is_logo = bool(data.get("contains_logo") and data.get("confidence") in ("high", "medium"))
+                        logo_text = data.get("logo_text", "").strip() if is_logo else ""
+                    else:
+                        # 추출된 개별 이미지: 로고와 시각적으로 동일한지 비교
+                        resp = client.messages.create(
+                            model="claude-sonnet-4-6",
+                            max_tokens=128,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
+                                    {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
+                                    {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
+                                    {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
+                                    {"type": "text", "text": (
+                                        "두 번째 이미지가 첫 번째 이미지(참조 로고)와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
+                                        "주의: 두 번째 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
+                                        "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
+                                        "로고인 경우 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
+                                        "JSON으로만 답변 (다른 텍스트 금지):\n"
+                                        '{"is_same_logo": true, "confidence": "high", "logo_text": "LG U+"}'
+                                    )},
+                                ],
+                            }],
+                        )
+                        raw = resp.content[0].text.strip()
+                        if raw.startswith("```"):
+                            raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                        data = json.loads(raw)
+                        is_logo = bool(data.get("is_same_logo") and data.get("confidence") in ("high", "medium"))
+                        logo_text = data.get("logo_text", "").strip() if is_logo else ""
                 except Exception:
                     pass
                 logo_cache[img_hash] = (is_logo, logo_text)
@@ -338,8 +439,9 @@ def _detect_blind_in_images(
                     "context": logo_ctx,
                 })
 
-        # ── 2. 이미지 안에 회사명/대표자명 텍스트가 있는지 (로고 이미지 제외) ──
-        if text_keywords and not is_logo:
+        # ── 2. 이미지 안에 회사명/대표자명 텍스트가 있는지 (로고·페이지 렌더 제외) ──
+        # 페이지 렌더는 전체 페이지 텍스트가 포함되어 오탐이 발생하므로 건너뜀
+        if text_keywords and not is_logo and not is_page_render:
             if img_hash in text_cache:
                 found_kws, image_description = text_cache[img_hash]
             else:
@@ -406,27 +508,61 @@ def _detect_blind_in_images(
     if all_rows:
         sb.table("review_results").insert(all_rows).execute()
 
+    if oversized_pages:
+        pages_str = ", ".join(str(p) for p in sorted(set(oversized_pages)))
+        sb.table("review_files").update({
+            "parse_error": f"이미지 {len(oversized_pages)}개는 용량 제한(4MB) 초과로 블라인드 검토에서 제외되었습니다 (페이지: {pages_str}).",
+        }).eq("id", review_file["id"]).execute()
+
 
 def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None, competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
-    parsed = parse_file(
-        review_file["storage_path"],
-        review_file["mime_type"],
-        review_file["id"],
-        review_file["original_filename"],
-        review_file["proposal_type"],
-    )
+    """파일 하나를 파싱하고 검출을 수행한다.
 
-    sb.table("review_files").update({
-        "total_pages": parsed["total_pages"],
-        "parse_error": parsed["parse_error"],
-    }).eq("id", review_file["id"]).execute()
+    파일 단위 처리는 서로 독립적이므로, 이 파일에서 발생한 예외는 다른 파일이나 job 전체를
+    실패시키지 않도록 여기서 잡아 이 파일의 review_files 행에만 오류로 기록한다.
+    """
+    try:
+        parsed = parse_file(
+            review_file["storage_path"],
+            review_file["mime_type"],
+            review_file["id"],
+            review_file["original_filename"],
+            review_file["proposal_type"],
+        )
 
-    if parsed["parse_error"]:
-        return
+        sb.table("review_files").update({
+            "total_pages": parsed["total_pages"],
+            "parse_error": parsed["parse_error"],
+        }).eq("id", review_file["id"]).execute()
 
-    pages = parsed["pages"]
-    images = parsed.get("images") or []
+        if parsed["parse_error"]:
+            return
 
+        pages = parsed["pages"]
+        images = parsed.get("images") or []
+
+        _run_detections(sb, client, review_file, pages, images, blind_keywords, logo_path, competitor_eval, competitor_keywords)
+    except Exception as exc:
+        logger.exception("파일 검토 처리 실패 (%s)", review_file.get("original_filename"))
+        try:
+            sb.table("review_files").update({
+                "parse_error": f"검토 처리 중 오류가 발생했습니다: {str(exc)[:500]}",
+            }).eq("id", review_file["id"]).execute()
+        except Exception:
+            logger.exception("파일 오류 상태 기록 실패 (%s)", review_file.get("id"))
+
+
+def _run_detections(
+    sb,
+    client: Anthropic,
+    review_file: dict,
+    pages: list[dict],
+    images: list[dict],
+    blind_keywords: list,
+    logo_path: str | None,
+    competitor_eval: bool,
+    competitor_keywords: list | None,
+) -> None:
     # LLM 기반 검출 (최상급 표현 + 오타) — 청크 병렬 처리
     # 각 청크는 독립적이므로 ThreadPoolExecutor로 동시 호출 가능.
     # 결과 수집은 메인 스레드에서만 이루어지므로 llm_rows 동시 접근 없음.
@@ -506,14 +642,23 @@ def run_review_sync(job_id: str) -> None:
 
         # 파일이 2개 이상이면 ThreadPoolExecutor로 병렬 처리
         # supabase-py와 anthropic SDK 모두 httpx 기반이므로 멀티스레드 안전
+        # _process_file은 파일 단위 예외를 내부에서 잡아 기록하므로 fut.result()는
+        # 여기서 전파될 예외가 없어야 정상 — 혹시 모를 예상 밖 예외도 파일 하나 때문에
+        # 다른 파일 처리 결과나 job 전체를 실패시키지 않도록 개별적으로 로깅만 한다.
         if len(files) > 1:
             with ThreadPoolExecutor(max_workers=min(FILE_MAX_WORKERS, len(files))) as pool:
-                futures = [
-                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path, competitor_eval, competitor_keywords)
+                futures = {
+                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path, competitor_eval, competitor_keywords): f
                     for f in files
-                ]
+                }
                 for fut in as_completed(futures):
-                    fut.result()  # 예외가 있으면 여기서 전파 → except 블록으로
+                    try:
+                        fut.result()
+                    except Exception:
+                        logger.exception(
+                            "파일 처리 중 예상치 못한 예외 (%s)",
+                            futures[fut].get("original_filename"),
+                        )
         else:
             for review_file in files:
                 _process_file(sb, client, review_file, blind_keywords, logo_path, competitor_eval, competitor_keywords)
