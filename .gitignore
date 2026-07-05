@@ -61,3 +61,9 @@ alembic/versions/*.pyc
 
 # Logs
 *.log
+
+# Claude Code local settings/memory (personal, not shared project config)
+.claude/settings.local.json
+.claude/agent-memory/
+backend/.claude/settings.local.json
+backend/.claude/agent-memory/
