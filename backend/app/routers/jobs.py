@@ -492,12 +492,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     files = job.get("review_files") or []
     superlative_eval = job.get("superlative_eval", True)
     typo_eval = job.get("typo_eval", True)
+    competitor_eval = job.get("competitor_eval", False)
     blind_eval = job.get("blind_eval", False)
-    total_sup = total_typo = total_blind = 0
+    total_sup = total_typo = total_competitor = total_blind = 0
     for f in files:
         results = f.get("review_results") or []
         total_sup += sum(1 for x in results if x["category"] == "superlative")
         total_typo += sum(1 for x in results if x["category"] == "typo")
+        total_competitor += sum(1 for x in results if x["category"] == "competitor")
         total_blind += sum(1 for x in results if x["category"] in ("blind", "blind_image"))
 
     p = doc.add_paragraph()
@@ -508,6 +510,8 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         summary_rows.append(("최상급 표현(허위·과장 가능 문구)", f"{total_sup}건"))
     if typo_eval:
         summary_rows.append(("오타", f"{total_typo}건"))
+    if competitor_eval:
+        summary_rows.append(("경쟁사 비교/비방", f"{total_competitor}건"))
     if blind_eval:
         summary_rows.append(("블라인드 평가: 회사식별정보", f"{total_blind}건"))
     summary_rows.append(("검토 파일수", f"{len(files)}개"))
@@ -546,6 +550,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             results = f.get("review_results") or []
             sups = [x for x in results if x["category"] == "superlative"]
             typs = [x for x in results if x["category"] == "typo"]
+            comps = [x for x in results if x["category"] == "competitor"]
             blds = [x for x in results if x["category"] == "blind"]
             bld_imgs = [x for x in results if x["category"] == "blind_image"]
 
@@ -631,6 +636,13 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
                 _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE)
+
+            if comps:
+                r = doc.add_paragraph().add_run(f"  경쟁사 비교/비방 표현 ({len(comps)}건)")
+                r.font.bold = True
+                r.font.size = Pt(10)
+                r.font.color.rgb = RGBColor(0x03, 0x69, 0xA1)
+                _add_result_table(comps, "수정 제안", "suggestion", highlight_color=BLUE)
 
             if blds:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")

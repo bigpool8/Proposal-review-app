@@ -886,7 +886,9 @@ async function downloadPdf(){
     await new Promise(r=>setTimeout(r,80));
     const hPx=probe.scrollHeight;
     document.body.removeChild(probe);
-    const pdfH=Math.ceil(hPx*25.4/96)+24; // px→mm + 상하 마진
+    // px→mm + 상하 마진. jsPDF는 orientation:'portrait'에서 height<width(210mm)이면 두 값을
+    // 뒤바꿔버려 페이지가 의도한 186mm보다 좁아지고 표 오른쪽 열이 잘리므로 최소 211mm 보장.
+    const pdfH=Math.max(Math.ceil(hPx*25.4/96)+24, 211);
 
     await html2pdf().set({
       margin:[12,12,12,12],
@@ -911,6 +913,7 @@ function buildPdfHtml(data){
   const s=data.summary;
   const hasSuperlative=data.superlative_eval!==false;
   const hasTypo=data.typo_eval!==false;
+  const hasCompetitor=data.competitor_eval;
   const hasBlind=data.blind_eval;
   const now=new Date();
   const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일`;
@@ -925,6 +928,7 @@ function buildPdfHtml(data){
       <tr><td style="${hs};width:220px;white-space:nowrap">구분</td><td style="${hs};width:80px">건수</td></tr>
       ${hasSuperlative?`<tr><td style="${cs};white-space:nowrap">최상급 표현(허위·과장 가능 문구)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>`:''}
       ${hasTypo?`<tr><td style="${cs};white-space:nowrap">오타</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_typo}건</td></tr>`:''}
+      ${hasCompetitor?`<tr><td style="${cs};white-space:nowrap">경쟁사 비교/비방</td><td style="${cs};text-align:center;color:#0ea5e9;font-weight:700">${s.total_competitor||0}건</td></tr>`:''}
       ${hasBlind?`<tr><td style="${cs};white-space:nowrap">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
       <tr><td style="${cs};white-space:nowrap">검토 파일수</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${data.proposal_types.reduce((n,pt)=>n+pt.files.length,0)}개</td></tr>
     </table>`;
@@ -944,33 +948,41 @@ function buildPdfHtml(data){
       }
       const sups=results.filter(r=>r.category==='superlative');
       const typs=results.filter(r=>r.category==='typo');
+      const comps=results.filter(r=>r.category==='competitor');
       const blds=results.filter(r=>r.category==='blind');
       const bldImgs=results.filter(r=>r.category==='blind_image');
       if(sups.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#b45309;margin:6px 0 3px">최상급 표현(허위·과장 가능 문구) (${sups.length}건)</p>
-        <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
-          <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
+        <table style="border-collapse:collapse;table-layout:fixed;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:8%">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:12%">비고</td></tr>`;
         sups.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#b45309">검토 필요</td></tr>`; });
         h+=`</table>`;
       }
       if(typs.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">오타 (${typs.length}건)</p>
-        <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
-          <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:100px">수정 제안</td></tr>`;
+        <table style="border-collapse:collapse;table-layout:fixed;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:8%">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:16%">수정 제안</td></tr>`;
         typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};color:#6d28d9">${esc(r.suggestion||'')}</td></tr>`; });
+        h+=`</table>`;
+      }
+      if(comps.length){
+        h+=`<p style="font-size:10px;font-weight:700;color:#0369a1;margin:6px 0 3px">경쟁사 비교/비방 표현 (${comps.length}건)</p>
+        <table style="border-collapse:collapse;table-layout:fixed;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:8%">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:16%">수정 제안</td></tr>`;
+        comps.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};color:#0369a1">${esc(r.suggestion||'')}</td></tr>`; });
         h+=`</table>`;
       }
       if(blds.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</p>
-        <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
-          <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
+        <table style="border-collapse:collapse;table-layout:fixed;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:8%">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:12%">비고</td></tr>`;
         blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#dc2626">${r.detected_text||'식별 정보'}</td></tr>`; });
         h+=`</table>`;
       }
       if(bldImgs.length){
         h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</p>
-        <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
-          <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
+        <table style="border-collapse:collapse;table-layout:fixed;width:100%;margin-bottom:10px">
+          <tr><td style="${hs};width:8%">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:12%">비고</td></tr>`;
         bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#dc2626">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
         h+=`</table>`;
       }
