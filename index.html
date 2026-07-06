@@ -524,8 +524,8 @@ function renderJobs(jobs) {
   const list=$('d-list'); list.innerHTML='';
   jobs.forEach(j=>{
     const s=STATUS[j.status]||{t:j.status,c:'badge-gray'};
-    const rs=j.status==='completed'&&(j.superlative_count>0||j.typo_count>0||(j.blind_count||0)>0)
-      ?[j.superlative_count>0&&`최상급 ${j.superlative_count}건`,j.typo_count>0&&`오타 ${j.typo_count}건`,(j.blind_count||0)>0&&`블라인드 ${j.blind_count}건`].filter(Boolean).join(' · '):null;
+    const rs=j.status==='completed'&&(j.superlative_count>0||j.typo_count>0||(j.blind_count||0)>0||(j.competitor_count||0)>0)
+      ?[j.superlative_count>0&&`최상급 ${j.superlative_count}건`,j.typo_count>0&&`오타 ${j.typo_count}건`,(j.competitor_count||0)>0&&`경쟁사 ${j.competitor_count}건`,(j.blind_count||0)>0&&`블라인드 ${j.blind_count}건`].filter(Boolean).join(' · '):null;
     const isSel=sel.has(j.id);
     const div=document.createElement('div');
     div.className='card flex items-center gap-3';
