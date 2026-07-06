@@ -926,7 +926,7 @@ function buildPdfHtml(data){
       ${hasSuperlative?`<tr><td style="${cs}">최상급 표현(허위·과장 가능 문구)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>`:''}
       ${hasTypo?`<tr><td style="${cs}">오타</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_typo}건</td></tr>`:''}
       ${hasBlind?`<tr><td style="${cs}">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
-      <tr><td style="${cs}">검토 파일</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${s.files_with_issues}개</td></tr>
+      <tr><td style="${cs}">검토 파일수</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${s.files_with_issues}개</td></tr>
     </table>`;
 
   data.proposal_types.forEach((pt,pi)=>{
@@ -1007,7 +1007,7 @@ function renderResults(data){
     ${hasTypo?`<div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">오타</p><p class="text-xs" style="margin-bottom:.375rem;color:#b91c1c">맞춤법 및 철자 오류</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasCompetitor?`<div class="summary-card ${(s.total_competitor||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">경쟁사 비교/비방</p><p class="text-xs" style="margin-bottom:.375rem;color:#0369a1">비교·비방 표현</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#0ea5e9">${s.total_competitor||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">검토 파일</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개 파일에서 발견</p></div>`;
+    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">검토 파일수</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개</p></div>`;
   const activeLabels=[hasSuperlative&&'최상급 표현',hasTypo&&'오타',hasCompetitor&&'경쟁사 비교/비방',hasBlind&&'식별정보'].filter(Boolean).join(', ')||'선택한 항목';
   const body=$('res-body'); body.innerHTML='';
   data.proposal_types.forEach(pt=>{
