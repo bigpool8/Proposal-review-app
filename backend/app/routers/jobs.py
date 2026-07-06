@@ -493,17 +493,12 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     superlative_eval = job.get("superlative_eval", True)
     typo_eval = job.get("typo_eval", True)
     blind_eval = job.get("blind_eval", False)
-    total_sup = total_typo = total_blind = files_with_issues = 0
+    total_sup = total_typo = total_blind = 0
     for f in files:
         results = f.get("review_results") or []
-        sup = sum(1 for x in results if x["category"] == "superlative")
-        typo = sum(1 for x in results if x["category"] == "typo")
-        bl = sum(1 for x in results if x["category"] in ("blind", "blind_image"))
-        total_sup += sup
-        total_typo += typo
-        total_blind += bl
-        if results:
-            files_with_issues += 1
+        total_sup += sum(1 for x in results if x["category"] == "superlative")
+        total_typo += sum(1 for x in results if x["category"] == "typo")
+        total_blind += sum(1 for x in results if x["category"] in ("blind", "blind_image"))
 
     p = doc.add_paragraph()
     p.add_run("[ 검토 요약 ]").font.bold = True
@@ -515,7 +510,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         summary_rows.append(("오타", f"{total_typo}건"))
     if blind_eval:
         summary_rows.append(("블라인드 평가: 회사식별정보", f"{total_blind}건"))
-    summary_rows.append(("검토 파일수", f"{files_with_issues}개"))
+    summary_rows.append(("검토 파일수", f"{len(files)}개"))
 
     tbl = doc.add_table(rows=len(summary_rows), cols=2)
     tbl.style = "Table Grid"
