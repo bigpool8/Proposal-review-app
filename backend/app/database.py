@@ -9,7 +9,7 @@ from app.core.config import settings
 def _get_supabase_singleton() -> Client:
     # Cached so the underlying httpx.Client connection pool is reused across
     # requests instead of opening a fresh TCP/TLS connection per call.
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
 def get_supabase() -> Client:
