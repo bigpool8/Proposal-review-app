@@ -49,12 +49,12 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 .result-file-hdr:hover{background:#f9fafb}
 .result-sec-hdr{padding:.4rem 1.25rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid transparent}
 .result-sec-hdr.sup{background:#fffbeb;border-color:#fef3c7}
-.result-sec-hdr.typ{background:#fef2f2;border-color:#fee2e2}
-.result-sec-hdr.bld{background:#f5f3ff;border-color:#ede9fe}
+.result-sec-hdr.typ{background:#f5f3ff;border-color:#ede9fe}
+.result-sec-hdr.bld{background:#fef2f2;border-color:#fee2e2}
 .result-item{padding:.75rem 1.25rem;display:flex;align-items:flex-start;gap:.75rem}
 .result-item.sup{background:rgba(251,191,36,.06)}
-.result-item.typ{background:rgba(239,68,68,.06)}
-.result-item.bld{background:rgba(109,40,217,.04)}
+.result-item.typ{background:rgba(109,40,217,.04)}
+.result-item.bld{background:rgba(239,68,68,.06)}
 .dot{width:.5rem;height:.5rem;border-radius:50%;flex-shrink:0;margin-top:.375rem}
 .pg-badge{font-size:.8125rem;font-weight:600;white-space:nowrap;flex-shrink:0;margin-top:.125rem}
 .chevron{transition:transform .2s}
@@ -231,7 +231,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
       <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">최초, 최대, 유일 등 허위사실로 오인될 수 있는 표현을 검출합니다.</p>
       <div style="margin-top:.875rem;border-top:1px solid #f3f4f6;padding-top:.875rem">
         <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
-          <input type="checkbox" id="typo-eval-chk" checked style="width:1.1rem;height:1.1rem;accent-color:#ef4444;cursor:pointer">
+          <input type="checkbox" id="typo-eval-chk" checked style="width:1.1rem;height:1.1rem;accent-color:#7c3aed;cursor:pointer">
           <span style="font-size:.9375rem;font-weight:600;color:#1f2937">오타 검출</span>
         </label>
         <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">한글/영문 맞춤법 및 철자 오류를 검출합니다.</p>
@@ -924,8 +924,8 @@ function buildPdfHtml(data){
     <table style="border-collapse:collapse;margin-bottom:20px">
       <tr><td style="${hs};width:220px;white-space:nowrap">구분</td><td style="${hs};width:80px">건수</td></tr>
       ${hasSuperlative?`<tr><td style="${cs};white-space:nowrap">최상급 표현(허위·과장 가능 문구)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>`:''}
-      ${hasTypo?`<tr><td style="${cs};white-space:nowrap">오타</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_typo}건</td></tr>`:''}
-      ${hasBlind?`<tr><td style="${cs};white-space:nowrap">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
+      ${hasTypo?`<tr><td style="${cs};white-space:nowrap">오타</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_typo}건</td></tr>`:''}
+      ${hasBlind?`<tr><td style="${cs};white-space:nowrap">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
       <tr><td style="${cs};white-space:nowrap">검토 파일수</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${data.proposal_types.reduce((n,pt)=>n+pt.files.length,0)}개</td></tr>
     </table>`;
 
@@ -954,24 +954,24 @@ function buildPdfHtml(data){
         h+=`</table>`;
       }
       if(typs.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">오타 (${typs.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">오타 (${typs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:100px">수정 제안</td></tr>`;
-        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};color:#dc2626">${esc(r.suggestion||'')}</td></tr>`; });
+        typs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};color:#6d28d9">${esc(r.suggestion||'')}</td></tr>`; });
         h+=`</table>`;
       }
       if(blds.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#6d28d9">${r.detected_text||'식별 정보'}</td></tr>`; });
+        blds.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#dc2626">${r.detected_text||'식별 정보'}</td></tr>`; });
         h+=`</table>`;
       }
       if(bldImgs.length){
-        h+=`<p style="font-size:10px;font-weight:700;color:#6d28d9;margin:6px 0 3px">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</p>
+        h+=`<p style="font-size:10px;font-weight:700;color:#dc2626;margin:6px 0 3px">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</p>
         <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
           <tr><td style="${hs};width:45px">페이지</td><td style="${hs}">검출 내용</td><td style="${hs};width:70px">비고</td></tr>`;
-        bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#6d28d9">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
+        bldImgs.forEach(r=>{ h+=`<tr><td style="${cs};text-align:center">${r.page_number}p</td><td style="${cs}">${boldCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</td><td style="${cs};text-align:center;color:#dc2626">🖼 ${r.detected_text||'이미지'}</td></tr>`; });
         h+=`</table>`;
       }
     });
@@ -1004,9 +1004,9 @@ function renderResults(data){
   sg.style.gridTemplateColumns=`repeat(${colCount},1fr)`;
   sg.innerHTML=`
     ${hasSuperlative?`<div class="summary-card ${s.total_superlative===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">최상급 표현</p><p class="text-xs" style="margin-bottom:.375rem;color:#b45309">허위·과장 가능 문구</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    ${hasTypo?`<div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">오타</p><p class="text-xs" style="margin-bottom:.375rem;color:#b91c1c">맞춤법 및 철자 오류</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
+    ${hasTypo?`<div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">오타</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">맞춤법 및 철자 오류</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasCompetitor?`<div class="summary-card ${(s.total_competitor||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">경쟁사 비교/비방</p><p class="text-xs" style="margin-bottom:.375rem;color:#0369a1">비교·비방 표현</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#0ea5e9">${s.total_competitor||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
+    ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#b91c1c">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.125rem">검토 파일수</p><p class="text-xs" style="margin-bottom:.375rem;color:#1d4ed8">${esc(data.proposal_types.map(pt=>`${pt.label} ${pt.files.length}개`).join(', '))}</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#3b82f6">${data.proposal_types.reduce((n,pt)=>n+pt.files.length,0)}</p><p class="text-xs text-gray mt-1">개</p></div>`;
   const activeLabels=[hasSuperlative&&'최상급 표현',hasTypo&&'오타',hasCompetitor&&'경쟁사 비교/비방',hasBlind&&'식별정보'].filter(Boolean).join(', ')||'선택한 항목';
   const body=$('res-body'); body.innerHTML='';
@@ -1036,11 +1036,11 @@ function renderResults(data){
         </div>`);
       }
       if(typs.length){
-        bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">오타 (${typs.length}건)</span></div>`;
-        typs.forEach((r,i)=>bHtml+=`<div class="result-item typ" ${i<typs.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
-          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
+        bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">오타 (${typs.length}건)</span></div>`;
+        typs.forEach((r,i)=>bHtml+=`<div class="result-item typ" ${i<typs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
+          <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          ${r.suggestion?`<p class="text-xs mt-1" style="color:#dc2626">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
+          ${r.suggestion?`<p class="text-xs mt-1" style="color:#6d28d9">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
           </div>
         </div>`);
       }
@@ -1054,19 +1054,19 @@ function renderResults(data){
         </div>`);
       }
       if(blds.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
-        blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
-          <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
+        blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
+          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
+          <span style="font-size:.75rem;font-weight:500;color:#dc2626;background:#fee2e2;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
         </div>`);
       }
       if(bldImgs.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
-        bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
-          <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
+        bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
+          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
           <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#6d28d9;background:#ede9fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">🖼 ${r.detected_text||'이미지'} 검출</span></div>
+          <span style="font-size:.75rem;font-weight:500;color:#dc2626;background:#fee2e2;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">🖼 ${r.detected_text||'이미지'} 검출</span></div>
         </div>`);
       }
       const fc=document.createElement('div'); fc.className='result-file';
@@ -1077,9 +1077,9 @@ function renderResults(data){
         </div>
         <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:1rem">
           ${f.superlative_count>0?`<span class="text-xs" style="background:#fffbeb;color:#b45309;padding:.125rem .5rem;border-radius:9999px;font-weight:500">최상급 ${f.superlative_count}건</span>`:''}
-          ${f.typo_count>0?`<span class="text-xs" style="background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:500">오타 ${f.typo_count}건</span>`:''}
+          ${f.typo_count>0?`<span class="text-xs" style="background:#f5f3ff;color:#6d28d9;padding:.125rem .5rem;border-radius:9999px;font-weight:500">오타 ${f.typo_count}건</span>`:''}
           ${(f.competitor_count||0)>0?`<span class="text-xs" style="background:#e0f2fe;color:#0369a1;padding:.125rem .5rem;border-radius:9999px;font-weight:500">경쟁사 ${f.competitor_count}건</span>`:''}
-          ${(f.blind_count||0)>0?`<span class="text-xs" style="background:#f5f3ff;color:#6d28d9;padding:.125rem .5rem;border-radius:9999px;font-weight:500">블라인드 ${f.blind_count}건</span>`:''}
+          ${(f.blind_count||0)>0?`<span class="text-xs" style="background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:500">블라인드 ${f.blind_count}건</span>`:''}
           <svg class="chevron open" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
         </div>
       </div>

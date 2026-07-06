@@ -629,21 +629,21 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r = doc.add_paragraph().add_run(f"  오타 ({len(typs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
-                r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+                r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
                 _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE)
 
             if blds:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
-                r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
+                r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
                 _add_result_table(blds, "비고", "detected_text", highlight_color=BLUE)
 
             if bld_imgs:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(이미지) ({len(bld_imgs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
-                r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
+                r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
                 _add_result_table(bld_imgs, "비고", "detected_text", highlight_color=BLUE)
 
         doc.add_paragraph()
