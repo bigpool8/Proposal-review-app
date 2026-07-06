@@ -414,7 +414,7 @@ function fmtDate(iso) {
 }
 function fmtBytes(b) { return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
 function fileSummary(c) {
-  return [c.qualitative&&`정성 ${c.qualitative}개`, c.quantitative&&`정량 ${c.quantitative}개`, c.presentation&&`발표본 ${c.presentation}개`].filter(Boolean).join(' · ') || '파일 없음';
+  return [c.qualitative&&`정성제안서 ${c.qualitative}개`, c.quantitative&&`정량제안서 ${c.quantitative}개`, c.presentation&&`발표본 ${c.presentation}개`].filter(Boolean).join(' · ') || '파일 없음';
 }
 
 function show(page) {
