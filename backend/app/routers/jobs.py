@@ -490,6 +490,8 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
     # 요약
     files = job.get("review_files") or []
+    superlative_eval = job.get("superlative_eval", True)
+    typo_eval = job.get("typo_eval", True)
     blind_eval = job.get("blind_eval", False)
     total_sup = total_typo = total_blind = files_with_issues = 0
     for f in files:
@@ -506,14 +508,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     p = doc.add_paragraph()
     p.add_run("[ 검토 요약 ]").font.bold = True
 
-    summary_rows = [
-        ("구분", "건수"),
-        ("허위/과장 가능 문구(최상급 표현)", f"{total_sup}건"),
-        ("오타", f"{total_typo}건"),
-    ]
+    summary_rows = [("구분", "건수")]
+    if superlative_eval:
+        summary_rows.append(("최상급 표현(허위·과장 가능 문구)", f"{total_sup}건"))
+    if typo_eval:
+        summary_rows.append(("오타", f"{total_typo}건"))
     if blind_eval:
         summary_rows.append(("블라인드 평가: 회사식별정보", f"{total_blind}건"))
-    summary_rows.append(("이슈 파일", f"{files_with_issues}개"))
+    summary_rows.append(("검토 파일수", f"{files_with_issues}개"))
 
     tbl = doc.add_table(rows=len(summary_rows), cols=2)
     tbl.style = "Table Grid"
