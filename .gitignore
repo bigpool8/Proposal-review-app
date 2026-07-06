@@ -30,6 +30,9 @@ dump.rdb
 # Uploads directory
 backend/uploads/
 
+# DB backups (may contain password hashes / uploaded file contents)
+db_backups/
+
 # Node.js
 node_modules/
 npm-debug.log*
