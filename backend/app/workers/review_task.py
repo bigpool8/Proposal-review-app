@@ -301,7 +301,7 @@ def _detect_blind_in_images(
     client: Anthropic,
     review_file: dict,
     blind_keywords: list,
-    logo_path: str | None,
+    logo_paths: list[str],
     images: list[dict],
 ) -> None:
     """추출된 이미지에서 Claude vision으로 회사 식별정보를 검출.
@@ -315,17 +315,19 @@ def _detect_blind_in_images(
 
     text_keywords = [kw.get("value", "").strip() for kw in blind_keywords if kw.get("value", "").strip()]
 
-    logo_b64: str | None = None
-    logo_mime: str = "image/png"
-    if logo_path and os.path.exists(logo_path):
+    logo_refs: list[dict] = []
+    for logo_path in logo_paths or []:
+        if not logo_path or not os.path.exists(logo_path):
+            continue
         with open(logo_path, "rb") as f:
-            logo_b64 = base64.b64encode(f.read()).decode()
+            ref_b64 = base64.b64encode(f.read()).decode()
         ext = os.path.splitext(logo_path)[1].lower().lstrip(".")
-        logo_mime = f"image/{ext}" if ext in ("png", "jpeg", "jpg", "gif", "webp") else "image/png"
-        if logo_mime == "image/jpg":
-            logo_mime = "image/jpeg"
+        ref_mime = f"image/{ext}" if ext in ("png", "jpeg", "jpg", "gif", "webp") else "image/png"
+        if ref_mime == "image/jpg":
+            ref_mime = "image/jpeg"
+        logo_refs.append({"b64": ref_b64, "mime": ref_mime})
 
-    if not text_keywords and not logo_b64:
+    if not text_keywords and not logo_refs:
         return
 
     # 동일 이미지에 대해 Claude API 중복 호출 방지 (레이아웃 공통 이미지 등)
@@ -357,30 +359,34 @@ def _detect_blind_in_images(
         img_b64: str | None = None
         local_rows: list[dict] = []
 
-        # ── 1. 로고 이미지 시각적 유사도 비교 ──────────────────
+        # ── 1. 로고 이미지 시각적 유사도 비교 (참조 로고 여러 개 지원) ──
         is_logo = False
         logo_text = ""
-        if logo_b64:
+        if logo_refs:
             if img_hash in logo_cache:
                 is_logo, logo_text = logo_cache[img_hash]
             else:
                 if img_b64 is None:
                     img_b64 = base64.b64encode(img_bytes).decode()
+                logo_ref_content = [
+                    {"type": "image", "source": {"type": "base64", "media_type": ref["mime"], "data": ref["b64"]}}
+                    for ref in logo_refs
+                ]
                 try:
                     if is_page_render:
-                        # 페이지 전체 렌더 이미지: 페이지 어딘가에 로고가 있는지 확인
+                        # 페이지 전체 렌더 이미지: 페이지 어딘가에 참조 로고 중 하나가 있는지 확인
                         resp = client.messages.create(
                             model="claude-sonnet-4-6",
                             max_tokens=128,
                             messages=[{
                                 "role": "user",
                                 "content": [
-                                    {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
-                                    {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
+                                    {"type": "text", "text": f"다음은 참조 로고 이미지입니다 (총 {len(logo_refs)}개):"},
+                                    *logo_ref_content,
                                     {"type": "text", "text": "다음은 문서 페이지 전체 이미지입니다:"},
                                     {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
                                     {"type": "text", "text": (
-                                        "문서 페이지 어딘가에 참조 로고(또는 그 변형)가 포함되어 있습니까?\n"
+                                        "문서 페이지 어딘가에 위 참조 로고 중 하나(또는 그 변형)가 포함되어 있습니까?\n"
                                         "로고가 있다면 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
                                         "JSON으로만 답변 (다른 텍스트 금지):\n"
                                         '{"contains_logo": true, "confidence": "high", "logo_text": "LG U+"}'
@@ -395,20 +401,20 @@ def _detect_blind_in_images(
                         is_logo = bool(data.get("contains_logo") and data.get("confidence") in ("high", "medium"))
                         logo_text = data.get("logo_text", "").strip() if is_logo else ""
                     else:
-                        # 추출된 개별 이미지: 로고와 시각적으로 동일한지 비교
+                        # 추출된 개별 이미지: 참조 로고 중 하나와 시각적으로 동일한지 비교
                         resp = client.messages.create(
                             model="claude-sonnet-4-6",
                             max_tokens=128,
                             messages=[{
                                 "role": "user",
                                 "content": [
-                                    {"type": "text", "text": "다음은 참조 로고 이미지입니다:"},
-                                    {"type": "image", "source": {"type": "base64", "media_type": logo_mime, "data": logo_b64}},
+                                    {"type": "text", "text": f"다음은 참조 로고 이미지입니다 (총 {len(logo_refs)}개):"},
+                                    *logo_ref_content,
                                     {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
                                     {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
                                     {"type": "text", "text": (
-                                        "두 번째 이미지가 첫 번째 이미지(참조 로고)와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
-                                        "주의: 두 번째 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
+                                        "마지막 이미지가 위 참조 로고 중 하나와 시각적으로 동일한 로고/브랜드 그래픽입니까?\n"
+                                        "주의: 마지막 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
                                         "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
                                         "로고인 경우 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
                                         "JSON으로만 답변 (다른 텍스트 금지):\n"
@@ -515,7 +521,7 @@ def _detect_blind_in_images(
         }).eq("id", review_file["id"]).execute()
 
 
-def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_path: str | None, competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
+def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_paths: list[str], competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
     """파일 하나를 파싱하고 검출을 수행한다.
 
     파일 단위 처리는 서로 독립적이므로, 이 파일에서 발생한 예외는 다른 파일이나 job 전체를
@@ -541,7 +547,7 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
         pages = parsed["pages"]
         images = parsed.get("images") or []
 
-        _run_detections(sb, client, review_file, pages, images, blind_keywords, logo_path, competitor_eval, competitor_keywords)
+        _run_detections(sb, client, review_file, pages, images, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
     except Exception as exc:
         logger.exception("파일 검토 처리 실패 (%s)", review_file.get("original_filename"))
         try:
@@ -559,7 +565,7 @@ def _run_detections(
     pages: list[dict],
     images: list[dict],
     blind_keywords: list,
-    logo_path: str | None,
+    logo_paths: list[str],
     competitor_eval: bool,
     competitor_keywords: list | None,
 ) -> None:
@@ -601,8 +607,8 @@ def _run_detections(
         _search_blind_keywords(sb, review_file, blind_keywords, pages)
 
     # 블라인드 평가: 이미지 검출 (회사명/대표자명 텍스트 + 로고)
-    if blind_keywords or logo_path:
-        _detect_blind_in_images(sb, client, review_file, blind_keywords, logo_path, images)
+    if blind_keywords or logo_paths:
+        _detect_blind_in_images(sb, client, review_file, blind_keywords, logo_paths, images)
 
     # 경쟁사 비교/비방 표현 검출
     if competitor_eval:
@@ -618,7 +624,7 @@ def run_review_sync(job_id: str) -> None:
         }).eq("id", job_id).execute()
 
         job_res = sb.table("proposal_review").select(
-            "blind_eval,blind_keywords,blind_logo_path,competitor_eval,competitor_keywords"
+            "blind_eval,blind_keywords,blind_logo_paths,competitor_eval,competitor_keywords"
         ).eq("id", job_id).execute()
         job_data = job_res.data[0] if job_res.data else {}
         blind_eval = job_data.get("blind_eval", False)
@@ -627,7 +633,7 @@ def run_review_sync(job_id: str) -> None:
             [kw for kw in raw_keywords if kw.get("value", "").strip()]
             if blind_eval else []
         )
-        logo_path = job_data.get("blind_logo_path") if blind_eval else None
+        logo_paths = (job_data.get("blind_logo_paths") or []) if blind_eval else []
         competitor_eval = job_data.get("competitor_eval", False)
         raw_comp_keywords = job_data.get("competitor_keywords") or []
         competitor_keywords = (
@@ -648,7 +654,7 @@ def run_review_sync(job_id: str) -> None:
         if len(files) > 1:
             with ThreadPoolExecutor(max_workers=min(FILE_MAX_WORKERS, len(files))) as pool:
                 futures = {
-                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_path, competitor_eval, competitor_keywords): f
+                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_paths, competitor_eval, competitor_keywords): f
                     for f in files
                 }
                 for fut in as_completed(futures):
@@ -661,7 +667,7 @@ def run_review_sync(job_id: str) -> None:
                         )
         else:
             for review_file in files:
-                _process_file(sb, client, review_file, blind_keywords, logo_path, competitor_eval, competitor_keywords)
+                _process_file(sb, client, review_file, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
 
         sb.table("proposal_review").update({
             "status": "completed",

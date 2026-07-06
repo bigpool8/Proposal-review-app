@@ -45,7 +45,6 @@ class FileUploadResponse(BaseModel):
 class StartJobRequest(BaseModel):
     blind_eval: bool = False
     blind_keywords: List[dict] = []
-    blind_logo_b64: Optional[str] = None
-    blind_logo_mime: Optional[str] = None
+    blind_logos: List[dict] = []
     competitor_eval: bool = False
     competitor_keywords: List[dict] = []

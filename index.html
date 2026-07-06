@@ -248,11 +248,10 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
         <div style="margin-top:1rem;border-top:1px solid #f3f4f6;padding-top:1rem">
           <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.5rem">② 이미지 식별 (회사 로고 등) <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택)</span></p>
           <label id="logo-upload-label" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem .875rem;border:1px dashed #d1d5db;border-radius:.5rem;font-size:.8125rem;color:#6b7280;background:#fafafa">
-            <span>🖼 로고 파일 선택</span>
-            <input type="file" id="blind-logo-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="onLogoSelected(this)">
+            <span>🖼 이미지 파일 선택</span>
+            <input type="file" id="blind-logo-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none" onchange="onLogoSelected(this)">
           </label>
-          <span id="logo-file-name" style="font-size:.8125rem;color:#374151;margin-left:.75rem"></span>
-          <button id="logo-clear-btn" onclick="clearLogo()" aria-label="로고 파일 제거" title="제거" style="display:none;font-size:.75rem;color:#ef4444;background:none;border:none;cursor:pointer;margin-left:.25rem">✕</button>
+          <div id="logo-file-list"></div>
           <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">※ 로고 검출은 Claude 비전 AI를 사용합니다. 해상도가 낮거나 복잡한 배경이 있으면 검출이 누락될 수 있습니다.</p>
         </div>
       </div>
@@ -342,6 +341,7 @@ let blindEval = false;
 let blindKeywords = [];
 let competitorEval = false;
 let competitorKeywords = [];
+let blindLogoFiles = [];
 const LABELS = { qualitative:'정성제안서', quantitative:'정량제안서', presentation:'발표본' };
 const STATUS = {
   draft:      { t:'업로드 중',  c:'badge-gray' },
@@ -559,9 +559,10 @@ async function createJob(){
 /* ── 업로드 ──────────────────────────────────────────── */
 function openUpload(id){
   jobId=id; files={qualitative:[],quantitative:[],presentation:[]};
-  blindEval=false; blindKeywords=[];
+  blindEval=false; blindKeywords=[]; blindLogoFiles=[];
   const bChk=$('blind-eval-chk'); if(bChk) bChk.checked=false;
   const bSec=$('blind-eval-section'); if(bSec) bSec.style.display='none';
+  renderLogoFiles();
   $('u-username').textContent=un();
   ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
   updateStart(); show('upload');
@@ -704,16 +705,27 @@ function renderBlindKeywords(){
 }
 
 function onLogoSelected(inp){
-  const f=inp.files[0];
-  if(!f){clearLogo();return;}
-  $('logo-file-name').textContent=f.name;
-  $('logo-clear-btn').style.display='inline';
+  for(const f of inp.files){
+    if(!blindLogoFiles.some(e=>e.name===f.name&&e.size===f.size&&e.lastModified===f.lastModified)){
+      blindLogoFiles.push(f);
+    }
+  }
+  inp.value='';
+  renderLogoFiles();
 }
-function clearLogo(){
-  const inp=$('blind-logo-input');
-  if(inp){inp.value='';}
-  $('logo-file-name').textContent='';
-  $('logo-clear-btn').style.display='none';
+function removeLogoFile(i){
+  blindLogoFiles.splice(i,1);
+  renderLogoFiles();
+}
+function renderLogoFiles(){
+  const c=$('logo-file-list');
+  if(!c) return;
+  c.innerHTML=blindLogoFiles.map((f,i)=>`
+    <div style="display:flex;align-items:center;gap:.5rem;margin-top:.375rem;font-size:.8125rem;color:#374151">
+      <span class="truncate" style="max-width:220px">${esc(f.name)}</span>
+      <button onclick="removeLogoFile(${i})" aria-label="이미지 파일 제거" title="제거" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:.9rem;line-height:1">✕</button>
+    </div>
+  `).join('');
 }
 
 async function doStart(){
@@ -730,23 +742,18 @@ async function doStart(){
         if(inp){const v=inp.value.trim(); if(v) kws.push({type:sel?sel.value:'회사명',value:v});}
       });
     }
-    let logoB64=null, logoMime=null;
-    if(isBlind){
-      const logoInp=$('blind-logo-input');
-      if(logoInp&&logoInp.files[0]){
-        const file=logoInp.files[0];
-        logoMime=file.type||'image/png';
-        logoB64=await new Promise((res,rej)=>{
-          const reader=new FileReader();
-          reader.onload=e=>res(e.target.result.split(',')[1]);
-          reader.onerror=rej;
-          reader.readAsDataURL(file);
-        });
-      }
+    let logos=[];
+    if(isBlind&&blindLogoFiles.length){
+      logos=await Promise.all(blindLogoFiles.map(file=>new Promise((res,rej)=>{
+        const reader=new FileReader();
+        reader.onload=e=>res({b64:e.target.result.split(',')[1],mime:file.type||'image/png'});
+        reader.onerror=rej;
+        reader.readAsDataURL(file);
+      })));
     }
     const isCompetitor=$('competitor-eval-chk')?.checked||false;
     const compKws=isCompetitor?competitorKeywords.filter(k=>k.value.trim()).map(k=>({value:k.value.trim()})):[];
-    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logo_b64:logoB64,blind_logo_mime:logoMime,competitor_eval:isCompetitor,competitor_keywords:compKws})});
+    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logos:logos,competitor_eval:isCompetitor,competitor_keywords:compKws})});
     hideModal(); openResults(jobId);
   }
   catch(e){ toast(e.message||'검토를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }

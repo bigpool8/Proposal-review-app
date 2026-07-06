@@ -327,29 +327,32 @@ def start_job(
     if not files:
         raise HTTPException(status_code=400, detail="파일을 먼저 업로드하세요.")
 
-    # 로고 이미지 저장 (base64 → 파일)
-    logo_path: str | None = None
-    if req.blind_eval and req.blind_logo_b64:
+    # 로고 이미지 저장 (base64 → 파일, 여러 개 지원)
+    logo_paths: list[str] = []
+    if req.blind_eval and req.blind_logos:
         import base64 as _b64
         logo_dir = os.path.join(UPLOAD_BASE, job_id)
         os.makedirs(logo_dir, exist_ok=True)
-        ext = ".png"
-        if req.blind_logo_mime:
-            mime_ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
-            ext = mime_ext.get(req.blind_logo_mime, ".png")
-        logo_path = os.path.abspath(os.path.join(logo_dir, f"logo{ext}"))
-        try:
-            logo_bytes = _b64.b64decode(req.blind_logo_b64)
-        except Exception:
-            raise HTTPException(status_code=400, detail="로고 이미지 데이터가 올바르지 않습니다.")
-        with open(logo_path, "wb") as f:
-            f.write(logo_bytes)
+        mime_ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
+        for i, logo in enumerate(req.blind_logos):
+            b64_data = logo.get("b64")
+            if not b64_data:
+                continue
+            ext = mime_ext.get(logo.get("mime"), ".png")
+            logo_path = os.path.abspath(os.path.join(logo_dir, f"logo_{i}{ext}"))
+            try:
+                logo_bytes = _b64.b64decode(b64_data)
+            except Exception:
+                raise HTTPException(status_code=400, detail="로고 이미지 데이터가 올바르지 않습니다.")
+            with open(logo_path, "wb") as f:
+                f.write(logo_bytes)
+            logo_paths.append(logo_path)
 
     sb.table("proposal_review").update({
         "status": "pending",
         "blind_eval": req.blind_eval,
         "blind_keywords": req.blind_keywords,
-        "blind_logo_path": logo_path,
+        "blind_logo_paths": logo_paths,
         "competitor_eval": req.competitor_eval,
         "competitor_keywords": req.competitor_keywords if req.competitor_eval else [],
     }).eq("id", job_id).execute()
@@ -438,7 +441,7 @@ def get_job_results(
         "error_message": job.get("error_message"),
         "blind_eval": job.get("blind_eval", False),
         "blind_keywords": job.get("blind_keywords") or [],
-        "has_logo": bool(job.get("blind_logo_path")),
+        "has_logo": bool(job.get("blind_logo_paths")),
         "competitor_eval": job.get("competitor_eval", False),
         "competitor_keywords": job.get("competitor_keywords") or [],
         "summary": {
