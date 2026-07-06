@@ -43,6 +43,8 @@ class FileUploadResponse(BaseModel):
 
 
 class StartJobRequest(BaseModel):
+    superlative_eval: bool = True
+    typo_eval: bool = True
     blind_eval: bool = False
     blind_keywords: List[dict] = []
     blind_logos: List[dict] = []

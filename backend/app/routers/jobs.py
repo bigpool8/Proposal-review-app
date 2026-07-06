@@ -350,6 +350,8 @@ def start_job(
 
     sb.table("proposal_review").update({
         "status": "pending",
+        "superlative_eval": req.superlative_eval,
+        "typo_eval": req.typo_eval,
         "blind_eval": req.blind_eval,
         "blind_keywords": req.blind_keywords,
         "blind_logo_paths": logo_paths,
@@ -439,6 +441,8 @@ def get_job_results(
         "job_id": job_id,
         "status": job["status"],
         "error_message": job.get("error_message"),
+        "superlative_eval": job.get("superlative_eval", True),
+        "typo_eval": job.get("typo_eval", True),
         "blind_eval": job.get("blind_eval", False),
         "blind_keywords": job.get("blind_keywords") or [],
         "has_logo": bool(job.get("blind_logo_paths")),

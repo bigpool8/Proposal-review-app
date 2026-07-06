@@ -225,6 +225,20 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
     <div id="sec-presentation"></div>
     <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
       <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
+        <input type="checkbox" id="superlative-eval-chk" checked style="width:1.1rem;height:1.1rem;accent-color:#f59e0b;cursor:pointer">
+        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">최상급 표현 검출 (허위, 과장 가능 문구)</span>
+      </label>
+      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">최초, 최대, 최고 등 허위사실로 오인될 수 있는 표현을 검출합니다.</p>
+      <div style="margin-top:.875rem;border-top:1px solid #f3f4f6;padding-top:.875rem">
+        <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
+          <input type="checkbox" id="typo-eval-chk" checked style="width:1.1rem;height:1.1rem;accent-color:#ef4444;cursor:pointer">
+          <span style="font-size:.9375rem;font-weight:600;color:#1f2937">오타 검출</span>
+        </label>
+        <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">한글/영문 맞춤법 및 철자 오류를 검출합니다.</p>
+      </div>
+    </div>
+    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
+      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
         <input type="checkbox" id="competitor-eval-chk" onchange="toggleCompetitorEval()" style="width:1.1rem;height:1.1rem;accent-color:#0ea5e9;cursor:pointer">
         <span style="font-size:.9375rem;font-weight:600;color:#1f2937">경쟁사 비교/비방 표현 검출</span>
       </label>
@@ -563,6 +577,8 @@ function openUpload(id){
   blindEval=false; blindKeywords=[]; blindLogoFiles=[];
   const bChk=$('blind-eval-chk'); if(bChk) bChk.checked=false;
   const bSec=$('blind-eval-section'); if(bSec) bSec.style.display='none';
+  const supChk=$('superlative-eval-chk'); if(supChk) supChk.checked=true;
+  const typoChk=$('typo-eval-chk'); if(typoChk) typoChk.checked=true;
   renderLogoFiles();
   $('u-username').textContent=un();
   ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
@@ -754,7 +770,9 @@ async function doStart(){
     }
     const isCompetitor=$('competitor-eval-chk')?.checked||false;
     const compKws=isCompetitor?competitorKeywords.filter(k=>k.value.trim()).map(k=>({value:k.value.trim()})):[];
-    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({blind_eval:isBlind,blind_keywords:kws,blind_logos:logos,competitor_eval:isCompetitor,competitor_keywords:compKws})});
+    const isSuperlative=$('superlative-eval-chk')?.checked||false;
+    const isTypo=$('typo-eval-chk')?.checked||false;
+    await api('/api/jobs/'+jobId+'/start',{method:'POST',body:JSON.stringify({superlative_eval:isSuperlative,typo_eval:isTypo,blind_eval:isBlind,blind_keywords:kws,blind_logos:logos,competitor_eval:isCompetitor,competitor_keywords:compKws})});
     hideModal(); openResults(jobId);
   }
   catch(e){ toast(e.message||'검토를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }
@@ -891,6 +909,8 @@ function boldCtx(ctx, det, color){
 
 function buildPdfHtml(data){
   const s=data.summary;
+  const hasSuperlative=data.superlative_eval!==false;
+  const hasTypo=data.typo_eval!==false;
   const hasBlind=data.blind_eval;
   const now=new Date();
   const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일`;
@@ -903,8 +923,8 @@ function buildPdfHtml(data){
     <h2 style="font-size:12px;font-weight:700;border-bottom:2px solid #4f46e5;padding-bottom:3px;margin:0 0 8px">검토 요약</h2>
     <table style="border-collapse:collapse;margin-bottom:20px">
       <tr><td style="${hs};width:130px">구분</td><td style="${hs};width:80px">건수</td></tr>
-      <tr><td style="${cs}">허위/과장 가능 문구(최상급 표현)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>
-      <tr><td style="${cs}">오타</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_typo}건</td></tr>
+      ${hasSuperlative?`<tr><td style="${cs}">허위/과장 가능 문구(최상급 표현)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>`:''}
+      ${hasTypo?`<tr><td style="${cs}">오타</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_typo}건</td></tr>`:''}
       ${hasBlind?`<tr><td style="${cs}">블라인드 평가: 회사식별정보</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
       <tr><td style="${cs}">이슈 파일</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${s.files_with_issues}개</td></tr>
     </table>`;
@@ -975,17 +995,20 @@ function renderResults(data){
   resultData = data;
   $('res-loading').style.display='none'; $('res-content').style.display='block';
   const s=data.summary;
+  const hasSuperlative=data.superlative_eval!==false;
+  const hasTypo=data.typo_eval!==false;
   const hasBlind=data.blind_eval;
   const hasCompetitor=data.competitor_eval;
   const sg=$('res-summary');
-  const colCount=3+(hasBlind?1:0)+(hasCompetitor?1:0);
+  const colCount=1+(hasSuperlative?1:0)+(hasTypo?1:0)+(hasBlind?1:0)+(hasCompetitor?1:0);
   sg.style.gridTemplateColumns=`repeat(${colCount},1fr)`;
   sg.innerHTML=`
-    <div class="summary-card ${s.total_superlative===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">최상급 표현</p><p class="text-xs" style="margin-bottom:.375rem;color:#b45309">허위·과장 가능 문구</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
-    <div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.25rem">오타</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>
+    ${hasSuperlative?`<div class="summary-card ${s.total_superlative===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">최상급 표현</p><p class="text-xs" style="margin-bottom:.375rem;color:#b45309">허위·과장 가능 문구</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
+    ${hasTypo?`<div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.25rem">오타</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasCompetitor?`<div class="summary-card ${(s.total_competitor||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">경쟁사 비교/비방</p><p class="text-xs" style="margin-bottom:.375rem;color:#0369a1">비교·비방 표현</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#0ea5e9">${s.total_competitor||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
     <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.25rem">이슈 파일</p><p style="font-size:1.875rem;font-weight:700;color:#3b82f6">${s.files_with_issues}</p><p class="text-xs text-gray mt-1">개 파일에서 발견</p></div>`;
+  const activeLabels=[hasSuperlative&&'최상급 표현',hasTypo&&'오타',hasCompetitor&&'경쟁사 비교/비방',hasBlind&&'식별정보'].filter(Boolean).join(', ')||'선택한 항목';
   const body=$('res-body'); body.innerHTML='';
   data.proposal_types.forEach(pt=>{
     const tot=pt.files.reduce((n,f)=>n+f.superlative_count+f.typo_count+(f.blind_count||0)+(f.competitor_count||0),0);
@@ -1003,7 +1026,7 @@ function renderResults(data){
       const bldImgs=f.results.filter(r=>r.category==='blind_image');
       let bHtml='';
       if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">파일을 읽는 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
-      if(!f.results.length&&!f.parse_error) bHtml+=`<div class="result-clean"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>검출된 이슈 없음 — 이 파일에서 최상급 표현, 오타, 식별정보가 발견되지 않았습니다.</div>`;
+      if(!f.results.length&&!f.parse_error) bHtml+=`<div class="result-clean"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>검출된 이슈 없음 — 이 파일에서 ${esc(activeLabels)}이(가) 발견되지 않았습니다.</div>`;
       if(sups.length){
         bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">허위/과장 가능 문구(최상급 표현) (${sups.length}건)</span></div>`;
         sups.forEach((r,i)=>bHtml+=`<div class="result-item sup" ${i<sups.length-1?'style="border-bottom:1px solid rgba(251,191,36,.12)"':''}>

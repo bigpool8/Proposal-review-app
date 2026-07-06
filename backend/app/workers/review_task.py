@@ -30,32 +30,50 @@ def _get_sb():
     return get_supabase()
 
 
-SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
-주어진 텍스트에서 두 가지 항목을 검출해야 합니다.
-
-1. 최상급 표현: 허위사실로 오인될 수 있는 표현
+SUPERLATIVE_INSTRUCTIONS = """최상급 표현: 허위사실로 오인될 수 있는 표현
    - 해당 표현: 최초, 최대, 최고, 최선, 유일, 독보적, 가장, 압도적, 세계 최
    - 아래 표현은 검출 대상에서 반드시 제외할 것: 최적, 최적화, 극대화, 최우선, 최신, 탁월, 탁월한
    - 해당 표현이 있어도 사실일 수 있으므로 '검토 필요'로만 플래그. 오류로 단정하지 말 것.
    - 고유명사 일부로 포함된 경우(예: 최고급 상품명)는 제외
+   - category는 "superlative", suggestion은 항상 null"""
 
-2. 오타: 한글 또는 영문 맞춤법/철자 오류
+TYPO_INSTRUCTIONS = """오타: 한글 또는 영문 맞춤법/철자 오류
    - 전문 용어, 고유명사, 브랜드명, 약어는 오타로 처리하지 말 것
    - 수정 제안은 1개만 제시
+   - category는 "typo", suggestion에 수정 제안 텍스트"""
+
+
+def _build_llm_system_prompt(superlative_eval: bool, typo_eval: bool) -> str | None:
+    """superlative/typo 검출 항목 선택에 따라 LLM system prompt를 동적으로 구성.
+
+    둘 다 꺼져 있으면 None을 반환해 호출자가 아예 이 검출 단계를 건너뛰게 한다.
+    """
+    sections = []
+    if superlative_eval:
+        sections.append(SUPERLATIVE_INSTRUCTIONS)
+    if typo_eval:
+        sections.append(TYPO_INSTRUCTIONS)
+    if not sections:
+        return None
+    numbered = "\n\n".join(f"{i + 1}. {text}" for i, text in enumerate(sections))
+    return f"""당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
+주어진 텍스트에서 다음 항목을 검출해야 합니다.
+
+{numbered}
 
 출력 형식은 반드시 아래 JSON 형식을 따르세요. JSON 외 다른 텍스트는 출력하지 마세요:
-{
+{{
   "results": [
-    {
-      "category": "superlative" | "typo",
+    {{
+      "category": "위에 지정된 category 값",
       "detected_text": "검출된 텍스트",
-      "suggestion": "수정 제안 (오타일 때만, 최상급은 null)",
+      "suggestion": "수정 제안 (해당하는 경우만, 없으면 null)",
       "page_number": 페이지번호(정수),
       "context": "검출된 텍스트를 포함한 전후 1~2문장"
-    }
+    }}
   ]
-}
-결과가 없으면 {"results": []} 반환."""
+}}
+결과가 없으면 {{"results": []}} 반환."""
 
 
 def _build_user_prompt(filename: str, pages: list[dict]) -> str:
@@ -69,11 +87,11 @@ def _build_user_prompt(filename: str, pages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _call_llm(client: Anthropic, filename: str, pages: list[dict]) -> list[dict]:
+def _call_llm(client: Anthropic, filename: str, pages: list[dict], system_prompt: str) -> list[dict]:
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[{"role": "user", "content": _build_user_prompt(filename, pages)}],
     )
     if not response.content or not hasattr(response.content[0], "text"):
@@ -521,7 +539,7 @@ def _detect_blind_in_images(
         }).eq("id", review_file["id"]).execute()
 
 
-def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list, logo_paths: list[str], competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
+def _process_file(sb, client: Anthropic, review_file: dict, superlative_eval: bool, typo_eval: bool, blind_keywords: list, logo_paths: list[str], competitor_eval: bool = False, competitor_keywords: list | None = None) -> None:
     """파일 하나를 파싱하고 검출을 수행한다.
 
     파일 단위 처리는 서로 독립적이므로, 이 파일에서 발생한 예외는 다른 파일이나 job 전체를
@@ -547,7 +565,7 @@ def _process_file(sb, client: Anthropic, review_file: dict, blind_keywords: list
         pages = parsed["pages"]
         images = parsed.get("images") or []
 
-        _run_detections(sb, client, review_file, pages, images, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
+        _run_detections(sb, client, review_file, pages, images, superlative_eval, typo_eval, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
     except Exception as exc:
         logger.exception("파일 검토 처리 실패 (%s)", review_file.get("original_filename"))
         try:
@@ -564,20 +582,23 @@ def _run_detections(
     review_file: dict,
     pages: list[dict],
     images: list[dict],
+    superlative_eval: bool,
+    typo_eval: bool,
     blind_keywords: list,
     logo_paths: list[str],
     competitor_eval: bool,
     competitor_keywords: list | None,
 ) -> None:
-    # LLM 기반 검출 (최상급 표현 + 오타) — 청크 병렬 처리
+    # LLM 기반 검출 (최상급 표현 + 오타, 선택된 항목만) — 청크 병렬 처리
     # 각 청크는 독립적이므로 ThreadPoolExecutor로 동시 호출 가능.
     # 결과 수집은 메인 스레드에서만 이루어지므로 llm_rows 동시 접근 없음.
-    chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
+    system_prompt = _build_llm_system_prompt(superlative_eval, typo_eval)
+    chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)] if system_prompt else []
     llm_rows: list[dict] = []
     if chunks:
         with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
             futures = {
-                pool.submit(_call_llm, client, review_file["original_filename"], chunk): chunk
+                pool.submit(_call_llm, client, review_file["original_filename"], chunk, system_prompt): chunk
                 for chunk in chunks
             }
             for fut in as_completed(futures):
@@ -624,9 +645,11 @@ def run_review_sync(job_id: str) -> None:
         }).eq("id", job_id).execute()
 
         job_res = sb.table("proposal_review").select(
-            "blind_eval,blind_keywords,blind_logo_paths,competitor_eval,competitor_keywords"
+            "superlative_eval,typo_eval,blind_eval,blind_keywords,blind_logo_paths,competitor_eval,competitor_keywords"
         ).eq("id", job_id).execute()
         job_data = job_res.data[0] if job_res.data else {}
+        superlative_eval = job_data.get("superlative_eval", True)
+        typo_eval = job_data.get("typo_eval", True)
         blind_eval = job_data.get("blind_eval", False)
         raw_keywords = job_data.get("blind_keywords") or []
         blind_keywords = (
@@ -654,7 +677,7 @@ def run_review_sync(job_id: str) -> None:
         if len(files) > 1:
             with ThreadPoolExecutor(max_workers=min(FILE_MAX_WORKERS, len(files))) as pool:
                 futures = {
-                    pool.submit(_process_file, sb, client, f, blind_keywords, logo_paths, competitor_eval, competitor_keywords): f
+                    pool.submit(_process_file, sb, client, f, superlative_eval, typo_eval, blind_keywords, logo_paths, competitor_eval, competitor_keywords): f
                     for f in files
                 }
                 for fut in as_completed(futures):
@@ -667,7 +690,7 @@ def run_review_sync(job_id: str) -> None:
                         )
         else:
             for review_file in files:
-                _process_file(sb, client, review_file, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
+                _process_file(sb, client, review_file, superlative_eval, typo_eval, blind_keywords, logo_paths, competitor_eval, competitor_keywords)
 
         sb.table("proposal_review").update({
             "status": "completed",
