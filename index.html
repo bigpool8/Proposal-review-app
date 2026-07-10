@@ -502,6 +502,7 @@ async function doChangePassword() {
 function doLogout() {
   localStorage.removeItem('access_token'); localStorage.removeItem('username');
   if(pollTmr) clearTimeout(pollTmr);
+  const u=$('l-user'), p=$('l-pass'); if(u) u.value=''; if(p) p.value='';
   show('login');
 }
 
