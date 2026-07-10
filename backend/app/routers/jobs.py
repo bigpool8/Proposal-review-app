@@ -511,7 +511,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     if typo_eval:
         summary_rows.append(("오타", f"{total_typo}건"))
     if competitor_eval:
-        summary_rows.append(("경쟁사 비교/비방", f"{total_competitor}건"))
+        summary_rows.append(("경쟁사 비교/비방 표현", f"{total_competitor}건"))
     if blind_eval:
         summary_rows.append(("블라인드 평가(회사식별정보)", f"{total_blind}건"))
     summary_rows.append(("검토 파일수", f"{len(files)}개"))
