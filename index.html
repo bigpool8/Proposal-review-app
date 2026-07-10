@@ -928,7 +928,7 @@ function buildPdfHtml(data){
     <table style="border-collapse:collapse;margin-bottom:20px">
       <tr><td style="${hs};width:220px;white-space:nowrap">구분</td><td style="${hs};width:80px">건수</td></tr>
       ${hasSuperlative?`<tr><td style="${cs};white-space:nowrap">최상급 표현(허위·과장 가능 문구)</td><td style="${cs};text-align:center;color:#f59e0b;font-weight:700">${s.total_superlative}건</td></tr>`:''}
-      ${hasTypo?`<tr><td style="${cs};white-space:nowrap">오타</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_typo}건</td></tr>`:''}
+      ${hasTypo?`<tr><td style="${cs};white-space:nowrap">오타(맞춤법 및 철자 오류)</td><td style="${cs};text-align:center;color:#7c3aed;font-weight:700">${s.total_typo}건</td></tr>`:''}
       ${hasCompetitor?`<tr><td style="${cs};white-space:nowrap">경쟁사 비교/비방 표현</td><td style="${cs};text-align:center;color:#0ea5e9;font-weight:700">${s.total_competitor||0}건</td></tr>`:''}
       ${hasBlind?`<tr><td style="${cs};white-space:nowrap">블라인드 평가(회사식별정보)</td><td style="${cs};text-align:center;color:#ef4444;font-weight:700">${s.total_blind||0}건</td></tr>`:''}
       <tr><td style="${cs};white-space:nowrap">검토 파일수</td><td style="${cs};text-align:center;color:#3b82f6;font-weight:700">${data.proposal_types.reduce((n,pt)=>n+pt.files.length,0)}개</td></tr>

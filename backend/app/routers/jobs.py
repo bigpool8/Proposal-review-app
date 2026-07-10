@@ -509,7 +509,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     if superlative_eval:
         summary_rows.append(("최상급 표현(허위·과장 가능 문구)", f"{total_sup}건"))
     if typo_eval:
-        summary_rows.append(("오타", f"{total_typo}건"))
+        summary_rows.append(("오타(맞춤법 및 철자 오류)", f"{total_typo}건"))
     if competitor_eval:
         summary_rows.append(("경쟁사 비교/비방 표현", f"{total_competitor}건"))
     if blind_eval:
