@@ -104,7 +104,8 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 /* 모바일 대응 */
 @media (max-width:640px){
   nav{padding:1rem}
-  nav [style*="position:absolute"]{display:none}
+  nav>*:first-child{display:none}
+  nav [style*="position:absolute"]{position:static!important;left:auto!important;transform:none!important}
   .auth-box{padding:1.75rem 1.25rem}
   .auth-title{font-size:1.5rem;text-align:center;padding:0 1rem}
   .main,.main-sm{padding:1.25rem 1rem}
