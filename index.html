@@ -916,8 +916,8 @@ function buildPdfHtml(data){
   const hasTypo=data.typo_eval!==false;
   const hasCompetitor=data.competitor_eval;
   const hasBlind=data.blind_eval;
-  const now=new Date();
-  const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일`;
+  const now=data.created_at?new Date(data.created_at):new Date();
+  const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const cs='border:1px solid #d1d5db;padding:5px 8px;font-size:10px;vertical-align:top';
   const hs=cs+';background:#f3f4f6;font-weight:700;text-align:center';
 

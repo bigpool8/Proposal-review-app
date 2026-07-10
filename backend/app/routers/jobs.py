@@ -4,6 +4,7 @@ import urllib.parse
 import uuid
 from datetime import datetime as _dt
 from typing import List
+from zoneinfo import ZoneInfo
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -440,6 +441,7 @@ def get_job_results(
     return {
         "job_id": job_id,
         "status": job["status"],
+        "created_at": job.get("created_at"),
         "error_message": job.get("error_message"),
         "superlative_eval": job.get("superlative_eval", True),
         "typo_eval": job.get("typo_eval", True),
@@ -480,9 +482,17 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     r.font.bold = True
     r.font.color.rgb = RGBColor(0x4F, 0x46, 0xE5)
 
+    review_dt = _dt.now(ZoneInfo("Asia/Seoul"))
+    created_at = job.get("created_at")
+    if created_at:
+        try:
+            review_dt = _dt.fromisoformat(created_at).astimezone(ZoneInfo("Asia/Seoul"))
+        except ValueError:
+            pass
+
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    r = p.add_run(_dt.now().strftime("검토 일시: %Y년 %m월 %d일"))
+    r = p.add_run(review_dt.strftime("검토 일시: %Y년 %m월 %d일 %H:%M"))
     r.font.size = Pt(10)
     r.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
 
