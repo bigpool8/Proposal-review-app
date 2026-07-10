@@ -22,6 +22,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 .btn-full{width:100%;padding:.75rem 1rem;font-size:1rem}
 .btn-primary{background:#2563eb;color:#fff}.btn-primary:hover:not(:disabled){background:#1d4ed8}
 .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover:not(:disabled){background:#dc2626}
+.btn-slate{background:#475569;color:#fff}.btn-slate:hover:not(:disabled){background:#334155}
 .btn-outline{background:#fff;color:#374151;border:1px solid #e5e7eb}.btn-outline:hover:not(:disabled){background:#f9fafb}
 .btn-sm{padding:.375rem .875rem;font-size:.875rem}
 .error-msg{color:#ef4444;background:#fef2f2;padding:.625rem .875rem;border-radius:.5rem;font-size:.875rem;margin-top:.5rem}
@@ -192,7 +193,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
       <div class="flex items-center gap-3">
         <input type="checkbox" id="chk-all" onchange="toggleAll()" style="width:1rem;height:1rem;accent-color:#7c3aed">
         <span class="text-sm text-gray">전체 선택</span>
-        <button class="btn btn-danger btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
+        <button class="btn btn-slate btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
       </div>
       <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 제안서 검토 요청</button>
     </div>
