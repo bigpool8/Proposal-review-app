@@ -917,13 +917,13 @@ function buildPdfHtml(data){
   const hasCompetitor=data.competitor_eval;
   const hasBlind=data.blind_eval;
   const now=data.created_at?new Date(data.created_at):new Date();
-  const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const dateStr=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월 ${String(now.getDate()).padStart(2,'0')}일`;
   const cs='border:1px solid #d1d5db;padding:5px 8px;font-size:10px;vertical-align:top';
   const hs=cs+';background:#f3f4f6;font-weight:700;text-align:center';
 
   let h=`<div style="color:#111827;line-height:1.6">
     <h1 style="text-align:center;color:#4f46e5;font-size:20px;margin:0 0 4px">제안서 검토 결과</h1>
-    <p style="text-align:right;color:#6b7280;font-size:10px;margin:0 0 16px">검토 일시: ${dateStr}</p>
+    <p style="text-align:right;color:#6b7280;font-size:10px;margin:0 0 16px">검토 날짜: ${dateStr}</p>
     <h2 style="font-size:12px;font-weight:700;border-bottom:2px solid #4f46e5;padding-bottom:3px;margin:0 0 8px">검토 요약</h2>
     <table style="border-collapse:collapse;margin-bottom:20px">
       <tr><td style="${hs};width:220px;white-space:nowrap">구분</td><td style="${hs};width:80px">건수</td></tr>

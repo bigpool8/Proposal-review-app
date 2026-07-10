@@ -492,7 +492,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    r = p.add_run(review_dt.strftime("검토 일시: %Y년 %m월 %d일 %H:%M"))
+    r = p.add_run(review_dt.strftime("검토 날짜: %Y년 %m월 %d일"))
     r.font.size = Pt(10)
     r.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
 
