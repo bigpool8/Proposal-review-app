@@ -515,13 +515,20 @@ async function loadDashboard() {
   try {
     let jobs = await api('/api/jobs');
     // 파일 없는 draft 잡을 단일 batch-delete 요청으로 정리 (기존 N개 개별 요청 → 1회)
+    // 단, 생성된 지 얼마 안 된 건은 지금 막 파일 업로드가 진행 중일 수 있으므로
+    // (첫 파일이 서버에 기록되기 전 잠깐은 file_counts가 0으로 보임) 유예 시간을 둔다 —
+    // 그렇지 않으면 업로드 도중 이 페이지로 넘어왔을 때 검토 건 자체가 삭제돼 버린다.
+    const EMPTY_DRAFT_GRACE_MS = 30*60*1000;
+    const now=Date.now();
     const emptyIds = jobs
-      .filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation===0)
+      .filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation===0
+        && (now-new Date(j.created_at).getTime())>EMPTY_DRAFT_GRACE_MS)
       .map(j=>j.id);
     if (emptyIds.length > 0) {
       await api('/api/jobs/batch-delete', {method:'POST', body:JSON.stringify({job_ids:emptyIds})}).catch(()=>{});
     }
-    jobs = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation>0);
+    const emptyIdSet=new Set(emptyIds);
+    jobs = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation>0 || !emptyIdSet.has(j.id));
     renderJobs(jobs);
     if (jobs.some(j=>j.status==='pending'||j.status==='processing')) pollTmr=setTimeout(loadDashboard,10000);
   } catch(e){ /* ignore */ }
@@ -581,7 +588,7 @@ async function createJob(){
 }
 
 /* ── 업로드 ──────────────────────────────────────────── */
-function openUpload(id){
+async function openUpload(id){
   jobId=id; files={qualitative:[],quantitative:[],presentation:[]};
   blindEval=false; blindKeywords=[]; blindLogoFiles=[];
   const bChk=$('blind-eval-chk'); if(bChk) bChk.checked=false;
@@ -592,6 +599,19 @@ function openUpload(id){
   $('u-username').textContent=un();
   ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
   updateStart(); show('upload');
+
+  // 업로드 도중 다른 페이지로 이동했다가 돌아온 경우, 이미 서버에 저장된
+  // 파일 목록을 다시 불러와야 한다 — 그렇지 않으면 실제로는 업로드된
+  // 파일이 화면에서 안 보여 다시 업로드가 안 된 것처럼 보인다.
+  try {
+    const d = await api('/api/jobs/'+id);
+    if (jobId!==id) return; // 그 사이 다른 검토 건으로 이동했으면 무시
+    (d.files||[]).forEach(f=>{
+      if (files[f.proposal_type]) files[f.proposal_type].push({id:f.id,original_filename:f.original_filename,file_size_bytes:f.file_size_bytes});
+    });
+    ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
+    updateStart();
+  } catch(e){ toast(e.message||'파일 목록을 불러오지 못했습니다.','error'); }
 }
 
 function renderSec(type){
