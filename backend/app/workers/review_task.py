@@ -200,14 +200,17 @@ def _call_competitor_llm(client: Anthropic, filename: str, pages: list[dict], co
         return []
 
 
-def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, competitor_keywords: list, pages: list[dict]) -> None:
+def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, competitor_keywords: list, pages: list[dict]) -> tuple[int, int]:
     """LLM으로 경쟁사 비교/비방 표현을 검출 (방식 A + B 혼합).
 
     - 방식 A: 프롬프트 기반 자동 검출 (경쟁사명 없이도 동작)
     - 방식 B: competitor_keywords 제공 시 해당 회사명이 비교·비방 맥락에서 언급되는지 LLM이 판단
+
+    반환값: (총 청크 수, 실패한 청크 수) — 호출자가 실패율을 판단해 사용자에게 경고할 수 있도록.
     """
     chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
     rows: list[dict] = []
+    failed = 0
     if chunks:
         with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
             futures = {
@@ -220,6 +223,7 @@ def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, com
                 except Exception as exc:
                     logger.warning("경쟁사 LLM 청크 오류 (%s): %s", review_file["original_filename"], exc)
                     items = []
+                    failed += 1
                 for item in items:
                     if item.get("category") == "competitor":
                         rows.append({
@@ -233,6 +237,7 @@ def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, com
                         })
     if rows:
         sb.table("review_results").insert(rows).execute()
+    return len(chunks), failed
 
 
 def _expand_keyword(value: str) -> list[str]:
@@ -625,9 +630,12 @@ def _run_detections(
     # LLM 기반 검출 (최상급 표현 + 오타, 선택된 항목만) — 청크 병렬 처리
     # 각 청크는 독립적이므로 ThreadPoolExecutor로 동시 호출 가능.
     # 결과 수집은 메인 스레드에서만 이루어지므로 llm_rows 동시 접근 없음.
+    failure_notes: list[str] = []
+
     system_prompt = _build_llm_system_prompt(superlative_eval, typo_eval)
     chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)] if system_prompt else []
     llm_rows: list[dict] = []
+    llm_failed = 0
     if chunks:
         with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
             futures = {
@@ -643,6 +651,7 @@ def _run_detections(
                         review_file["original_filename"], exc,
                     )
                     items = []
+                    llm_failed += 1
                 for item in items:
                     llm_rows.append({
                         "id": str(uuid.uuid4()),
@@ -655,6 +664,8 @@ def _run_detections(
                     })
     if llm_rows:
         sb.table("review_results").insert(llm_rows).execute()
+    if llm_failed:
+        failure_notes.append(f"최상급 표현/오타 검출 중 {llm_failed}/{len(chunks)}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
 
     # 블라인드 평가: 텍스트 직접 검색
     if blind_keywords:
@@ -666,7 +677,15 @@ def _run_detections(
 
     # 경쟁사 비교/비방 표현 검출
     if competitor_eval:
-        _detect_competitor_expressions(sb, client, review_file, competitor_keywords or [], pages)
+        comp_total, comp_failed = _detect_competitor_expressions(sb, client, review_file, competitor_keywords or [], pages)
+        if comp_failed:
+            failure_notes.append(f"경쟁사 비교/비방 표현 검출 중 {comp_failed}/{comp_total}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
+
+    if failure_notes:
+        current = sb.table("review_files").select("parse_error").eq("id", review_file["id"]).execute()
+        existing = ((current.data[0].get("parse_error") if current.data else None) or "").strip()
+        combined = " ".join([existing] + failure_notes) if existing else " ".join(failure_notes)
+        sb.table("review_files").update({"parse_error": combined}).eq("id", review_file["id"]).execute()
 
 
 def run_review_sync(job_id: str) -> None:

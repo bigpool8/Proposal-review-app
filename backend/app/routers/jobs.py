@@ -610,11 +610,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r2.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
 
             if f.get("parse_error"):
-                r = doc.add_paragraph().add_run(f"⚠ 파싱 오류: {f['parse_error']}")
+                r = doc.add_paragraph().add_run(f"⚠ 처리 오류: {f['parse_error']}")
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
                 doc.add_paragraph()
-                continue
+                # parse_error가 있어도 일부 청크만 실패한 경우 부분 결과가 있을 수 있으므로,
+                # 결과가 전혀 없을 때만 건너뛴다 (파싱 자체가 실패한 경우와 동일하게 처리됨).
+                if not results:
+                    continue
 
             if not results:
                 r = doc.add_paragraph().add_run("검출된 항목 없음")

@@ -989,8 +989,7 @@ function buildPdfHtml(data){
     pt.files.forEach(f=>{
       h+=`<h3 style="font-size:11px;font-weight:700;margin:0 0 5px">▶ ${esc(f.original_filename)}${f.total_pages?` <span style="color:#6b7280;font-weight:400">(${f.total_pages}페이지)</span>`:''}</h3>`;
       if(f.parse_error){
-        h+=`<p style="color:#dc2626;font-size:10px;margin:0 0 10px">⚠ 파싱 오류: ${esc(f.parse_error)}</p>`;
-        return;
+        h+=`<p style="color:#dc2626;font-size:10px;margin:0 0 10px">⚠ 처리 오류: ${esc(f.parse_error)}</p>`;
       }
       const results=f.results||[];
       if(!results.length){
@@ -1088,7 +1087,7 @@ function renderResults(data){
       const blds=f.results.filter(r=>r.category==='blind');
       const bldImgs=f.results.filter(r=>r.category==='blind_image');
       let bHtml='';
-      if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">파일을 읽는 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
+      if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">이 파일 처리 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
       if(!f.results.length&&!f.parse_error) bHtml+=`<div class="result-clean"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>검출된 이슈 없음 — 이 파일에서 ${esc(activeLabels)}이(가) 발견되지 않았습니다.</div>`;
       if(sups.length){
         bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">최상급 표현(허위·과장 가능 문구) (${sups.length}건)</span></div>`;
