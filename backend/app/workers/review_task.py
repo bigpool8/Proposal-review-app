@@ -697,6 +697,20 @@ def run_review_sync(job_id: str) -> None:
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", job_id).execute()
 
+        # 파싱이 끝난 원본 업로드 파일은 더 이상 필요 없음 (재시도는 failed 건만
+        # 가능하므로 completed 건은 지워도 안전) — Railway 임시 디스크 용량을
+        # 계속 점유하지 않도록 정리한다.
+        for f in files:
+            try:
+                path = f.get("storage_path") or ""
+                if path and os.path.exists(path):
+                    os.remove(path)
+                parent = os.path.dirname(path) if path else ""
+                if parent and os.path.isdir(parent) and not os.listdir(parent):
+                    os.rmdir(parent)
+            except OSError:
+                pass
+
     except Exception as exc:
         sb.table("proposal_review").update({
             "status": "failed",

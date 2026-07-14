@@ -216,17 +216,24 @@ async def upload_file(
         raise HTTPException(status_code=400, detail="올바르지 않은 파일명입니다.")
 
     total_size = 0
-    async with aiofiles.open(abs_path, "wb") as out:
-        while True:
-            chunk = await file.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_FILE_SIZE:
-                await out.close()
-                os.remove(abs_path)
-                raise HTTPException(status_code=400, detail="파일 크기가 2GB를 초과합니다.")
-            await out.write(chunk)
+    try:
+        async with aiofiles.open(abs_path, "wb") as out:
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=400, detail="파일 크기가 2GB를 초과합니다.")
+                await out.write(chunk)
+    except Exception:
+        # 크기 초과, 디스크 공간 부족 등 어떤 이유로든 쓰기가 실패하면
+        # DB에 기록되지 않는 고아 파일이 남지 않도록 즉시 정리한다.
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+        if os.path.isdir(dir_path) and not os.listdir(dir_path):
+            os.rmdir(dir_path)
+        raise
 
     sb.table("review_files").insert({
         "id": file_id,
