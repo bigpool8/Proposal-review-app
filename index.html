@@ -385,7 +385,7 @@ async function api(path, opts={}) {
   if (tk()) h['Authorization'] = 'Bearer '+tk();
   if (opts.body instanceof FormData) delete h['Content-Type'];
   const r = await fetch(API+path, {...opts, headers:h});
-  const d = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  const d = (r.status!==204 && r.headers.get('content-type')?.includes('json')) ? await r.json() : null;
   const detail = Array.isArray(d?.detail)
     ? d.detail.map(e => e.msg?.replace(/^Value error,\s*/i, '')).join(' / ')
     : (d?.detail ?? null);
