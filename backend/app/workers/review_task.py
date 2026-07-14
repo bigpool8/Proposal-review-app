@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import logging
 import os
@@ -17,6 +18,34 @@ from app.services.parser import parse_file
 
 CHUNK_SIZE = 10
 MAX_IMAGE_BYTES = 4 * 1024 * 1024  # Claude API 이미지 크기 상한 (4MB)
+MAX_IMAGE_DIM = 1568  # Claude vision 권장 최대 변 (그 이상은 API가 어차피 축소함)
+
+
+def _shrink_image(img_bytes: bytes, max_bytes: int) -> bytes | None:
+    """이미지가 API 용량 상한을 넘으면 리사이즈/재압축해 JPEG로 축소한다.
+
+    고해상도 스크린샷·사진이 원본 그대로는 4MB를 넘어 블라인드 검토에서
+    통째로 제외되던 문제를 막기 위함 — 로고/텍스트 식별에는 원본 해상도가
+    필요 없으므로 화질을 낮춰서라도 API에 보내는 쪽이 낫다.
+    """
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(img_bytes))
+        img = img.convert("RGB")
+    except Exception:
+        return None
+
+    if max(img.size) > MAX_IMAGE_DIM:
+        ratio = MAX_IMAGE_DIM / max(img.size)
+        img = img.resize((max(1, round(img.width * ratio)), max(1, round(img.height * ratio))))
+
+    for quality in (85, 70, 55, 40):
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        data = buf.getvalue()
+        if len(data) <= max_bytes:
+            return data
+    return data
 
 # 동시 스레드 수 — Claude API rate limit과 Railway 메모리를 감안해 보수적으로 설정
 LLM_MAX_WORKERS = 3    # 텍스트 청크 병렬 LLM 호출
@@ -361,16 +390,20 @@ def _detect_blind_in_images(
         img_bytes = img.get("image_bytes") or b""
         if not img_bytes:
             return []
+        img_mime = img.get("mime_type", "image/png")
         if len(img_bytes) > MAX_IMAGE_BYTES:
-            logger.warning(
-                "이미지 용량 초과로 블라인드 검출 제외 (%s, page %s, %d bytes)",
-                review_file.get("original_filename"), img.get("page_number"), len(img_bytes),
-            )
-            oversized_pages.append(img["page_number"])
-            return []
+            shrunk = _shrink_image(img_bytes, MAX_IMAGE_BYTES)
+            if shrunk is None:
+                logger.warning(
+                    "이미지 용량 초과로 블라인드 검출 제외 (%s, page %s, %d bytes)",
+                    review_file.get("original_filename"), img.get("page_number"), len(img_bytes),
+                )
+                oversized_pages.append(img["page_number"])
+                return []
+            img_bytes = shrunk
+            img_mime = "image/jpeg"
 
         img_hash = hash(img_bytes)
-        img_mime = img.get("mime_type", "image/png")
         page_num = img["page_number"]
         is_page_render = img.get("is_page_render", False)
         # img_b64는 실제 API 호출이 필요할 때 한 번만 계산 (logo + text 양쪽 재사용)
