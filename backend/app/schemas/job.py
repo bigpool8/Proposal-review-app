@@ -42,6 +42,11 @@ class FileUploadResponse(BaseModel):
     proposal_type: str
 
 
+class ReorderFilesRequest(BaseModel):
+    proposal_type: str
+    file_ids: List[str]
+
+
 class StartJobRequest(BaseModel):
     superlative_eval: bool = True
     typo_eval: bool = False

@@ -598,13 +598,19 @@ function renderSec(type){
   const multi=type!=='presentation';
   const con=$('sec-'+type); con.innerHTML='';
   const canUp=multi||files[type].length===0;
-  const fHtml=files[type].map(f=>`
+  const fHtml=files[type].map((f,i)=>`
     <div class="file-item">
       <div style="min-width:0;margin-right:1rem">
         <p style="font-size:.9375rem;color:#1f2937" class="truncate">${esc(f.original_filename)}</p>
         <p class="text-xs text-gray">${fmtBytes(f.file_size_bytes)}</p>
       </div>
-      <button class="btn btn-sm" style="color:#ef4444;background:none;padding:0" onclick="delFile('${type}','${f.id}')">삭제</button>
+      <div style="display:flex;align-items:center;gap:.125rem;flex-shrink:0">
+        ${files[type].length>1?`
+        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;opacity:${i===0?'.35':'1'}" ${i===0?'disabled':''} onclick="moveFile('${type}',${i},-1)" aria-label="위로 이동" title="위로 이동">▲</button>
+        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;opacity:${i===files[type].length-1?'.35':'1'}" ${i===files[type].length-1?'disabled':''} onclick="moveFile('${type}',${i},1)" aria-label="아래로 이동" title="아래로 이동">▼</button>
+        `:''}
+        <button class="btn btn-sm" style="color:#ef4444;background:none;padding:0" onclick="delFile('${type}','${f.id}')">삭제</button>
+      </div>
     </div>`).join('');
   const sec=document.createElement('div');
   sec.className='upload-section';
@@ -649,6 +655,20 @@ async function handleFiles(type,flist,multi){
   }
   up.style.display='none';
   renderSec(type); updateStart();
+}
+
+async function moveFile(type,idx,dir){
+  const arr=files[type], j=idx+dir;
+  if(j<0||j>=arr.length) return;
+  [arr[idx],arr[j]]=[arr[j],arr[idx]];
+  renderSec(type);
+  try {
+    await api('/api/jobs/'+jobId+'/files/reorder',{method:'POST',body:JSON.stringify({proposal_type:type,file_ids:arr.map(f=>f.id)})});
+  } catch(e){
+    [arr[idx],arr[j]]=[arr[j],arr[idx]];
+    renderSec(type);
+    toast(e.message||'순서를 변경하지 못했습니다.','error');
+  }
 }
 
 async function delFile(type,fid){

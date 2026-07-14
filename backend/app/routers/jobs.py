@@ -14,7 +14,7 @@ from supabase import Client
 
 from app.database import get_supabase
 from app.routers.auth import get_current_user
-from app.schemas.job import FileCounts, FileResponse, FileUploadResponse, JobResponse, StartJobRequest
+from app.schemas.job import FileCounts, FileResponse, FileUploadResponse, JobResponse, ReorderFilesRequest, StartJobRequest
 
 
 class BatchDeleteRequest(BaseModel):
@@ -92,6 +92,8 @@ def _get_job(
     job = res.data[0]
     if job["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+    if with_files or with_results:
+        job["review_files"] = sorted(job.get("review_files") or [], key=lambda f: f.get("sort_order", 0))
     return job
 
 
@@ -235,6 +237,9 @@ async def upload_file(
             os.rmdir(dir_path)
         raise
 
+    existing = sb.table("review_files").select("id").eq("job_id", job_id).eq("proposal_type", proposal_type).execute()
+    next_order = len(existing.data or [])
+
     sb.table("review_files").insert({
         "id": file_id,
         "job_id": job_id,
@@ -243,6 +248,7 @@ async def upload_file(
         "storage_path": abs_path,
         "file_size_bytes": total_size,
         "mime_type": file.content_type or "application/octet-stream",
+        "sort_order": next_order,
     }).execute()
 
     return FileUploadResponse(
@@ -276,6 +282,29 @@ def delete_file(
         os.rmdir(parent)
 
     sb.table("review_files").delete().eq("id", file_id).execute()
+
+
+# ── 파일 순서 변경 ────────────────────────────────────────
+@router.post("/{job_id}/files/reorder")
+def reorder_files(
+    job_id: str,
+    body: ReorderFilesRequest,
+    current_user: dict = Depends(get_current_user),
+    sb: Client = Depends(get_supabase),
+):
+    job = _get_job(job_id, current_user["id"], sb)
+    if job["status"] != "draft":
+        raise HTTPException(status_code=409, detail="이미 검토가 시작된 건은 파일 순서를 변경할 수 없습니다.")
+
+    res = sb.table("review_files").select("id").eq("job_id", job_id).eq("proposal_type", body.proposal_type).execute()
+    existing_ids = {r["id"] for r in (res.data or [])}
+    if existing_ids != set(body.file_ids):
+        raise HTTPException(status_code=400, detail="파일 목록이 일치하지 않습니다.")
+
+    for idx, fid in enumerate(body.file_ids):
+        sb.table("review_files").update({"sort_order": idx}).eq("id", fid).execute()
+
+    return {"reordered": True}
 
 
 # ── 검토 건 삭제 ─────────────────────────────────────────
