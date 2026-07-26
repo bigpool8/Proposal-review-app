@@ -776,7 +776,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 doc.add_paragraph()
 
             if sups:
-                r = doc.add_paragraph().add_run(f"  허위/과장 가능 문구(최상급 표현) ({len(sups)}건)")
+                r = doc.add_paragraph().add_run(f"  최상급 표현(허위·과장 가능 문구) ({len(sups)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
