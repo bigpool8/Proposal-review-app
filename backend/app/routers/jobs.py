@@ -530,6 +530,21 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         for i, w in enumerate(widths_cm):
             tbl.columns[i].width = Cm(w)
 
+    def _set_cell_nowrap(cell) -> None:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        tc_pr.append(OxmlElement("w:noWrap"))
+
+    def _set_run_font(run, name: str) -> None:
+        # 완성형 한글 폰트에 없는 기호(■, ▶ 등)가 깨져 보이는 것을 막기 위해
+        # ascii/hAnsi/eastAsia 폰트를 모두 명시적으로 지정한다.
+        run.font.name = name
+        r_pr = run._element.get_or_add_rPr()
+        r_fonts = r_pr.find(qn("w:rFonts"))
+        if r_fonts is None:
+            r_fonts = OxmlElement("w:rFonts")
+            r_pr.append(r_fonts)
+        r_fonts.set(qn("w:eastAsia"), name)
+
     # 제목
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -610,6 +625,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         r.font.bold = True
         r.font.size = Pt(13)
         r.font.color.rgb = RGBColor(0x4F, 0x46, 0xE5)
+        _set_run_font(r, "맑은 고딕")
 
         for f in files_by_type[ptype]:
             results = f.get("review_results") or []
@@ -623,6 +639,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             r = p.add_run(f"▶ {f['original_filename']}")
             r.font.bold = True
             r.font.size = Pt(11)
+            _set_run_font(r, "맑은 고딕")
             if f.get("total_pages"):
                 r2 = p.add_run(f"  ({f['total_pages']}페이지)")
                 r2.font.size = Pt(9)
@@ -656,6 +673,8 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     rr = cell.paragraphs[0].add_run(h)
                     rr.font.bold = True
                     rr.font.size = Pt(9)
+                    if ci == 0:
+                        _set_cell_nowrap(cell)
                 for ri, item in enumerate(items):
                     row = tbl.rows[ri + 1]
                     ctx = (item.get("context") or item.get("detected_text") or "")[:300]
@@ -665,6 +684,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     # 페이지 번호 셀
                     c0 = row.cells[0]; c0.paragraphs[0].clear()
                     c0.paragraphs[0].add_run(f"{item['page_number']}p").font.size = Pt(9)
+                    _set_cell_nowrap(c0)
 
                     # 검출 내용 셀 — detected_text 볼드 (+ 색상)
                     c1 = row.cells[1]; c1.paragraphs[0].clear()
@@ -686,7 +706,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     # 비고/수정 제안 셀
                     c2 = row.cells[2]; c2.paragraphs[0].clear()
                     c2.paragraphs[0].add_run(col3_val or "").font.size = Pt(9)
-                col0_cm = CONTENT_WIDTH_CM * 0.08
+                col0_cm = CONTENT_WIDTH_CM * 0.10  # "페이지"/"999p" 같은 값이 줄바꿈되지 않을 최소 폭
                 col2_cm = CONTENT_WIDTH_CM * (col3_pct / 100)
                 col1_cm = CONTENT_WIDTH_CM - col0_cm - col2_cm
                 _set_col_widths(tbl, [col0_cm, col1_cm, col2_cm])
