@@ -524,6 +524,16 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         layout = OxmlElement("w:tblLayout")
         layout.set(qn("w:type"), "fixed")
         tbl_pr.append(layout)
+        # PDF 다운로드와 동일한 연한 회색(#D1D5DB) 테두리로 통일
+        borders = OxmlElement("w:tblBorders")
+        for tag in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            edge = OxmlElement(f"w:{tag}")
+            edge.set(qn("w:val"), "single")
+            edge.set(qn("w:sz"), "4")
+            edge.set(qn("w:space"), "0")
+            edge.set(qn("w:color"), "D1D5DB")
+            borders.append(edge)
+        tbl_pr.append(borders)
         for row in tbl.rows:
             for cell, w in zip(row.cells, widths_cm):
                 cell.width = Cm(w)
@@ -533,6 +543,26 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     def _set_cell_nowrap(cell) -> None:
         tc_pr = cell._tc.get_or_add_tcPr()
         tc_pr.append(OxmlElement("w:noWrap"))
+
+    def _shade_cell(cell, hex_color: str) -> None:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), hex_color)
+        tc_pr.append(shd)
+
+    def _add_bottom_border(paragraph, hex_color: str) -> None:
+        # PDF 다운로드의 h2 제목(border-bottom:2px solid) 스타일과 맞춤
+        p_pr = paragraph._p.get_or_add_pPr()
+        p_bdr = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "12")
+        bottom.set(qn("w:space"), "2")
+        bottom.set(qn("w:color"), hex_color)
+        p_bdr.append(bottom)
+        p_pr.append(p_bdr)
 
     def _set_run_font(run, name: str) -> None:
         # 완성형 한글 폰트에 없는 기호(■, ▶ 등)가 깨져 보이는 것을 막기 위해
@@ -585,21 +615,23 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
     p = doc.add_paragraph()
     p.add_run("[ 검토 요약 ]").font.bold = True
+    _add_bottom_border(p, "4F46E5")
 
-    summary_rows = [("구분", "건수")]
+    # (라벨, 값, 값 색상) — PDF 다운로드의 항목별 색상과 동일
+    summary_rows = [("구분", "건수", None)]
     if superlative_eval:
-        summary_rows.append(("최상급 표현(허위·과장 가능 문구)", f"{total_sup}건"))
+        summary_rows.append(("최상급 표현(허위·과장 가능 문구)", f"{total_sup}건", RGBColor(0xF5, 0x9E, 0x0B)))
     if typo_eval:
-        summary_rows.append(("오타(맞춤법 및 철자 오류)", f"{total_typo}건"))
+        summary_rows.append(("오타(맞춤법 및 철자 오류)", f"{total_typo}건", RGBColor(0x7C, 0x3A, 0xED)))
     if competitor_eval:
-        summary_rows.append(("경쟁사 비교/비방 표현", f"{total_competitor}건"))
+        summary_rows.append(("경쟁사 비교/비방 표현", f"{total_competitor}건", RGBColor(0x0E, 0xA5, 0xE9)))
     if blind_eval:
-        summary_rows.append(("블라인드 평가(회사식별정보)", f"{total_blind}건"))
-    summary_rows.append(("검토 파일수", f"{len(files)}개"))
+        summary_rows.append(("블라인드 평가(회사식별정보)", f"{total_blind}건", RGBColor(0xEF, 0x44, 0x44)))
+    summary_rows.append(("검토 파일수", f"{len(files)}개", RGBColor(0x3B, 0x82, 0xF6)))
 
     tbl = doc.add_table(rows=len(summary_rows), cols=2)
     tbl.style = "Table Grid"
-    for idx, (k, v) in enumerate(summary_rows):
+    for idx, (k, v, color) in enumerate(summary_rows):
         for ci, txt in enumerate((k, v)):
             cell = tbl.rows[idx].cells[ci]
             cell.paragraphs[0].clear()
@@ -607,6 +639,13 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             run.font.size = Pt(10)
             if idx == 0:
                 run.font.bold = True
+                _shade_cell(cell, "F3F4F6")
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            elif ci == 1:
+                run.font.bold = True
+                if color is not None:
+                    run.font.color.rgb = color
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     _set_col_widths(tbl, [CONTENT_WIDTH_CM * 0.7, CONTENT_WIDTH_CM * 0.3])
 
     doc.add_paragraph()
@@ -626,6 +665,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
         r.font.size = Pt(13)
         r.font.color.rgb = RGBColor(0x4F, 0x46, 0xE5)
         _set_run_font(r, "맑은 고딕")
+        _add_bottom_border(p, "4F46E5")
 
         for f in files_by_type[ptype]:
             results = f.get("review_results") or []
@@ -662,9 +702,20 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 doc.add_paragraph()
                 continue
 
-            BLUE = RGBColor(0x1D, 0x4E, 0xD8)
+            BLUE = RGBColor(0x25, 0x63, 0xEB)  # PDF 다운로드 검출 내용 강조색과 동일
 
-            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요", highlight_color=None, col3_pct: int = 12):
+            def _add_result_table(
+                items: list,
+                col3_header: str,
+                col3_key: str | None,
+                default_col3: str = "검토 필요",
+                highlight_color=None,
+                col3_pct: int = 12,
+                col3_color=None,
+                col3_center: bool = False,
+                col3_prefix: str = "",
+                col3_nowrap: bool = False,
+            ):
                 tbl = doc.add_table(rows=len(items) + 1, cols=3)
                 tbl.style = "Table Grid"
                 for ci, h in enumerate(["페이지", "검출 내용", col3_header]):
@@ -673,6 +724,8 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     rr = cell.paragraphs[0].add_run(h)
                     rr.font.bold = True
                     rr.font.size = Pt(9)
+                    _shade_cell(cell, "F3F4F6")
+                    cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                     if ci == 0:
                         _set_cell_nowrap(cell)
                 for ri, item in enumerate(items):
@@ -680,10 +733,13 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     ctx = (item.get("context") or item.get("detected_text") or "")[:300]
                     detected = item.get("detected_text") or ""
                     col3_val = item.get(col3_key, "") if col3_key else default_col3
+                    if col3_prefix and col3_val:
+                        col3_val = f"{col3_prefix}{col3_val}"
 
                     # 페이지 번호 셀
                     c0 = row.cells[0]; c0.paragraphs[0].clear()
                     c0.paragraphs[0].add_run(f"{item['page_number']}p").font.size = Pt(9)
+                    c0.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                     _set_cell_nowrap(c0)
 
                     # 검출 내용 셀 — detected_text 볼드 (+ 색상)
@@ -705,7 +761,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
                     # 비고/수정 제안 셀
                     c2 = row.cells[2]; c2.paragraphs[0].clear()
-                    c2.paragraphs[0].add_run(col3_val or "").font.size = Pt(9)
+                    rr3 = c2.paragraphs[0].add_run(col3_val or "")
+                    rr3.font.size = Pt(9)
+                    if col3_color is not None:
+                        rr3.font.color.rgb = col3_color
+                    if col3_center:
+                        c2.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    if col3_nowrap:
+                        _set_cell_nowrap(c2)
                 col0_cm = CONTENT_WIDTH_CM * 0.10  # "페이지"/"999p" 같은 값이 줄바꿈되지 않을 최소 폭
                 col2_cm = CONTENT_WIDTH_CM * (col3_pct / 100)
                 col1_cm = CONTENT_WIDTH_CM - col0_cm - col2_cm
@@ -717,35 +780,42 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
-                _add_result_table(sups, "비고", None, highlight_color=BLUE)
+                _add_result_table(sups, "비고", None, highlight_color=BLUE, col3_color=RGBColor(0xB4, 0x53, 0x09), col3_center=True)
 
             if typs:
                 r = doc.add_paragraph().add_run(f"  오타 ({len(typs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
-                _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16)
+                _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16, col3_color=RGBColor(0x6D, 0x28, 0xD9))
 
             if comps:
                 r = doc.add_paragraph().add_run(f"  경쟁사 비교/비방 표현 ({len(comps)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x03, 0x69, 0xA1)
-                _add_result_table(comps, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16)
+                _add_result_table(comps, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16, col3_color=RGBColor(0x03, 0x69, 0xA1))
 
             if blds:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
-                _add_result_table(blds, "비고", "detected_text", highlight_color=BLUE)
+                _add_result_table(
+                    blds, "비고", "detected_text", highlight_color=BLUE,
+                    col3_pct=18, col3_color=RGBColor(0xDC, 0x26, 0x26), col3_center=True, col3_nowrap=True,
+                )
 
             if bld_imgs:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(이미지) ({len(bld_imgs)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
-                _add_result_table(bld_imgs, "비고", "detected_text", highlight_color=BLUE)
+                _add_result_table(
+                    bld_imgs, "비고", "detected_text", highlight_color=BLUE,
+                    col3_pct=18, col3_color=RGBColor(0xDC, 0x26, 0x26), col3_center=True, col3_nowrap=True,
+                    col3_prefix="🖼 ",
+                )
 
         doc.add_paragraph()
 
