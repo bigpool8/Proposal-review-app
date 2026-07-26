@@ -502,13 +502,33 @@ def _build_word_doc(job: dict) -> io.BytesIO:
     from docx import Document
     from docx.shared import Cm, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
 
     doc = Document()
     for sec in doc.sections:
+        sec.page_width = Cm(21)
+        sec.page_height = Cm(29.7)
         sec.top_margin = Cm(2.5)
         sec.bottom_margin = Cm(2.5)
         sec.left_margin = Cm(2.5)
         sec.right_margin = Cm(2.5)
+    CONTENT_WIDTH_CM = 16  # page(21) - left/right margin(2.5*2), PDF 다운로드와 동일한 A4 기준
+
+    def _set_col_widths(tbl, widths_cm: list[float]) -> None:
+        # python-docx는 autofit이 켜져 있으면(기본값) tbl.columns[i].width를 무시하고
+        # 내용에 맞춰 열 너비를 재조정하므로, 고정 레이아웃으로 전환하고 모든 행의
+        # 셀 너비를 개별적으로 지정해야 실제로 반영된다.
+        tbl.autofit = False
+        tbl_pr = tbl._tbl.tblPr
+        layout = OxmlElement("w:tblLayout")
+        layout.set(qn("w:type"), "fixed")
+        tbl_pr.append(layout)
+        for row in tbl.rows:
+            for cell, w in zip(row.cells, widths_cm):
+                cell.width = Cm(w)
+        for i, w in enumerate(widths_cm):
+            tbl.columns[i].width = Cm(w)
 
     # 제목
     p = doc.add_paragraph()
@@ -572,8 +592,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
             run.font.size = Pt(10)
             if idx == 0:
                 run.font.bold = True
-    tbl.columns[0].width = Cm(5)
-    tbl.columns[1].width = Cm(3)
+    _set_col_widths(tbl, [CONTENT_WIDTH_CM * 0.7, CONTENT_WIDTH_CM * 0.3])
 
     doc.add_paragraph()
 
@@ -628,7 +647,7 @@ def _build_word_doc(job: dict) -> io.BytesIO:
 
             BLUE = RGBColor(0x1D, 0x4E, 0xD8)
 
-            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요", highlight_color=None):
+            def _add_result_table(items: list, col3_header: str, col3_key: str | None, default_col3: str = "검토 필요", highlight_color=None, col3_pct: int = 12):
                 tbl = doc.add_table(rows=len(items) + 1, cols=3)
                 tbl.style = "Table Grid"
                 for ci, h in enumerate(["페이지", "검출 내용", col3_header]):
@@ -667,9 +686,10 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                     # 비고/수정 제안 셀
                     c2 = row.cells[2]; c2.paragraphs[0].clear()
                     c2.paragraphs[0].add_run(col3_val or "").font.size = Pt(9)
-                tbl.columns[0].width = Cm(2)
-                tbl.columns[1].width = Cm(10)
-                tbl.columns[2].width = Cm(3)
+                col0_cm = CONTENT_WIDTH_CM * 0.08
+                col2_cm = CONTENT_WIDTH_CM * (col3_pct / 100)
+                col1_cm = CONTENT_WIDTH_CM - col0_cm - col2_cm
+                _set_col_widths(tbl, [col0_cm, col1_cm, col2_cm])
                 doc.add_paragraph()
 
             if sups:
@@ -684,14 +704,14 @@ def _build_word_doc(job: dict) -> io.BytesIO:
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
-                _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE)
+                _add_result_table(typs, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16)
 
             if comps:
                 r = doc.add_paragraph().add_run(f"  경쟁사 비교/비방 표현 ({len(comps)}건)")
                 r.font.bold = True
                 r.font.size = Pt(10)
                 r.font.color.rgb = RGBColor(0x03, 0x69, 0xA1)
-                _add_result_table(comps, "수정 제안", "suggestion", highlight_color=BLUE)
+                _add_result_table(comps, "수정 제안", "suggestion", highlight_color=BLUE, col3_pct=16)
 
             if blds:
                 r = doc.add_paragraph().add_run(f"  블라인드 평가: 회사식별정보(텍스트) ({len(blds)}건)")
