@@ -853,11 +853,11 @@ def retry_job(
 
     job = _get_job(job_id, current_user["id"], sb, with_files=True)
     file_ids = [f["id"] for f in (job.get("review_files") or [])]
-    # AI 호출이 전부 실패해 실질적으로 검토되지 못한 completed 건도 재시도를 허용한다
-    # (job 자체는 예외 없이 끝까지 처리되었으므로 status가 failed가 아니라 completed로 남음).
-    has_total_ai_failure = any("전부 실패" in (f.get("parse_error") or "") for f in (job.get("review_files") or []))
-    if job["status"] != "failed" and not (job["status"] == "completed" and has_total_ai_failure):
-        raise HTTPException(status_code=409, detail="failed 상태이거나 AI 검토가 전부 실패한 건만 재시도할 수 있습니다.")
+    # completed 건도 재시도를 허용한다 — AI 호출이 전부 실패해 결과가 비어 있는 경우뿐
+    # 아니라, 검출 프롬프트/필터가 개선된 뒤 기존 완료 건을 다시 검토하고 싶은 경우도
+    # 흔하므로 status만으로 판단한다 (pending/processing 중인 건만 막으면 충분).
+    if job["status"] not in ("failed", "completed"):
+        raise HTTPException(status_code=409, detail="failed 또는 completed 상태인 건만 재시도할 수 있습니다.")
 
     if file_ids:
         sb.table("review_results").delete().in_("file_id", file_ids).execute()
