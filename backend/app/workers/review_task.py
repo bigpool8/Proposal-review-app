@@ -108,6 +108,27 @@ def _is_excluded_superlative(detected_text: str) -> bool:
     return bool(_SUPERLATIVE_EXCLUDE_NUMERIC_RE.search(detected_text))
 
 
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalize_ws(text: str) -> str:
+    return _WHITESPACE_RE.sub(" ", text or "").strip()
+
+
+def _is_grounded(detected_text: str, source_text: str) -> bool:
+    """detected_text가 실제로 원문(source_text)에 존재하는지 확인한다.
+
+    LLM이 원문에 없는 표현을 스스로 지어내(할루시네이션) detected_text로 출력하는
+    경우를 걸러내기 위함이다 — 예: 원문에 "최초"가 전혀 없는데도 "관련 맥락: ...
+    1페이지 내 '최초' 단독 출현은 없으나 검토 결과 해당 없음" 같은 자기 자신의
+    추론 문구를 context에 남긴 채 detected_text="최초"를 그대로 결과에 포함시키는
+    경우. 공백/줄바꿈 차이는 원문 추출 과정에서 흔히 발생하므로 정규화 후 비교한다."""
+    dt = _normalize_ws(detected_text)
+    if not dt:
+        return False
+    return dt in _normalize_ws(source_text)
+
+
 TYPO_INSTRUCTIONS = """오타: 한글 또는 영문 맞춤법/철자 오류
    - 전문 용어, 고유명사, 브랜드명, 약어는 오타로 처리하지 말 것
    - 수정 제안은 1개만 제시
@@ -273,8 +294,9 @@ def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, com
                     logger.warning("경쟁사 LLM 청크 오류 (%s): %s", review_file["original_filename"], exc)
                     items = []
                     failed += 1
+                chunk_text = "\n".join(p.get("text") or "" for p in futures[fut])
                 for item in items:
-                    if item.get("category") == "competitor":
+                    if item.get("category") == "competitor" and _is_grounded(item.get("detected_text", ""), chunk_text):
                         rows.append({
                             "id": str(uuid.uuid4()),
                             "file_id": review_file["id"],
@@ -701,9 +723,16 @@ def _run_detections(
                     )
                     items = []
                     llm_failed += 1
+                chunk_text = "\n".join(p.get("text") or "" for p in futures[fut])
                 for item in items:
                     category = item.get("category", "")
                     detected_text = item.get("detected_text", "")
+                    if not _is_grounded(detected_text, chunk_text):
+                        logger.warning(
+                            "LLM 환각 의심으로 검출 제외 (%s): detected_text=%r가 원문에 없음",
+                            review_file["original_filename"], detected_text,
+                        )
+                        continue
                     if category == "superlative" and _is_excluded_superlative(detected_text):
                         continue
                     llm_rows.append({
