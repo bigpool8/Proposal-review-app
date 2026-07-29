@@ -367,7 +367,6 @@ let competitorKeywords = [];
 let blindLogoFiles = [];
 const LABELS = { qualitative:'정성제안서', quantitative:'정량제안서', presentation:'발표본' };
 const STATUS = {
-  draft:      { t:'업로드 중',  c:'badge-gray' },
   pending:    { t:'검토 대기',  c:'badge-blue' },
   processing: { t:'검토 중',   c:'badge-blue', s:true },
   completed:  { t:'검토 결과 보기', c:'badge-green' },
@@ -536,7 +535,16 @@ function renderJobs(jobs) {
   $('d-empty').style.display = jobs.length===0?'block':'none';
   const list=$('d-list'); list.innerHTML='';
   jobs.forEach(j=>{
-    const s=STATUS[j.status]||{t:j.status,c:'badge-gray'};
+    let s;
+    if (j.status==='draft') {
+      const totalFiles=j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation;
+      const isActivelyUploading = j.id===jobId && uploadingCount>0;
+      s = isActivelyUploading ? {t:'업로드 중',c:'badge-gray',s:true}
+        : totalFiles>0 ? {t:'업로드 완료',c:'badge-blue'}
+        : {t:'업로드 중',c:'badge-gray'};
+    } else {
+      s = STATUS[j.status]||{t:j.status,c:'badge-gray'};
+    }
     const rs=j.status==='completed'&&(j.superlative_count>0||j.typo_count>0||(j.blind_count||0)>0||(j.competitor_count||0)>0)
       ?[j.superlative_count>0&&`최상급 ${j.superlative_count}건`,j.typo_count>0&&`오타 ${j.typo_count}건`,(j.competitor_count||0)>0&&`경쟁사 ${j.competitor_count}건`,(j.blind_count||0)>0&&`블라인드 ${j.blind_count}건`].filter(Boolean).join(' · '):null;
     const isSel=sel.has(j.id);
@@ -681,6 +689,9 @@ async function handleFiles(type,flist,multi){
     } catch(e){ err.textContent=e.message;err.style.display='block'; }
   }
   } finally { uploadingCount--; }
+  // 업로드 도중 "검토 이력" 화면으로 이동해 있었다면, 백그라운드에서 업로드가
+  // 끝난 시점에 배지가 "업로드 중"에 머물러 있지 않도록 목록을 다시 그린다.
+  if (uploadingCount===0 && $('page-dashboard')?.classList.contains('active')) loadDashboard();
   up.style.display='none';
   renderSec(type); updateStart();
 }
