@@ -81,6 +81,14 @@ export default function DashboardPage() {
   const handleNew = async () => {
     setCreating(true);
     try {
+      // 이미 업로드 중인(작성 중인) draft 건이 있으면 새로 만들지 않고 이어서 사용한다.
+      // (느린 업로드 도중 "검토 이력"으로 이동했다가 다시 "+ 새 검토 요청"을 누르면
+      //  빈 draft 건이 계속 새로 생성되어 이력 목록에 중복 박스가 쌓이는 문제를 방지)
+      const existingDraft = jobs.find((j) => j.status === "draft");
+      if (existingDraft) {
+        router.push(`/jobs/${existingDraft.id}/upload`);
+        return;
+      }
       const { data } = await api.post("/api/jobs");
       router.push(`/jobs/${data.job_id}/upload`);
     } finally {

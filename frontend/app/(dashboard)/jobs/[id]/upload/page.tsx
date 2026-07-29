@@ -32,9 +32,10 @@ interface SectionProps {
   multiple: boolean;
   onUploaded: (f: UploadedFile) => void;
   onDeleted: (id: string) => void;
+  onUploadingChange: (uploading: boolean) => void;
 }
 
-function UploadSection({ jobId, type, label, files, multiple, onUploaded, onDeleted }: SectionProps) {
+function UploadSection({ jobId, type, label, files, multiple, onUploaded, onDeleted, onUploadingChange }: SectionProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -43,6 +44,7 @@ function UploadSection({ jobId, type, label, files, multiple, onUploaded, onDele
   const processFiles = useCallback(async (selected: File[]) => {
     setError("");
     setUploading(true);
+    onUploadingChange(true);
 
     for (const file of selected) {
       const ext = "." + (file.name.split(".").pop()?.toLowerCase() ?? "");
@@ -75,8 +77,9 @@ function UploadSection({ jobId, type, label, files, multiple, onUploaded, onDele
     }
 
     setUploading(false);
+    onUploadingChange(false);
     if (inputRef.current) inputRef.current.value = "";
-  }, [jobId, type, onUploaded]);
+  }, [jobId, type, onUploaded, onUploadingChange]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const all = Array.from(e.target.files ?? []);
@@ -224,6 +227,8 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [uploadingTypes, setUploadingTypes] = useState<Set<ProposalType>>(new Set());
+  const isUploading = uploadingTypes.size > 0;
 
   useEffect(() => {
     api
@@ -233,11 +238,36 @@ export default function UploadPage() {
       .finally(() => setLoading(false));
   }, [jobId, router]);
 
+  // 업로드 도중 탭을 닫거나 새로고침하면 진행 중인 업로드가 유실될 수 있어 경고한다.
+  useEffect(() => {
+    if (!isUploading) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isUploading]);
+
   const byType = (t: ProposalType) => files.filter((f) => f.proposal_type === t);
 
   const handleUploaded = (f: UploadedFile) => setFiles((prev) => [...prev, f]);
   const handleDeleted = (id: string) =>
     setFiles((prev) => prev.filter((f) => f.id !== id));
+  const handleUploadingChange = useCallback((type: ProposalType, uploading: boolean) => {
+    setUploadingTypes((prev) => {
+      const next = new Set(prev);
+      if (uploading) next.add(type); else next.delete(type);
+      return next;
+    });
+  }, []);
+
+  const handleLeave = () => {
+    if (isUploading && !confirm("업로드가 진행 중입니다. 지금 이동하면 업로드가 중단될 수 있습니다. 이동하시겠습니까?")) {
+      return;
+    }
+    router.push("/dashboard");
+  };
 
   const handleStart = async () => {
     setStarting(true);
@@ -265,34 +295,45 @@ export default function UploadPage() {
     <div className="min-h-screen bg-gray-50">
       <NavBar title={<span className="font-bold text-2xl text-indigo-700">제안서 업로드</span>}>
         <button
-          onClick={() => router.push("/dashboard")}
+          onClick={handleLeave}
           className="text-lg font-bold text-purple-700 hover:text-purple-900"
         >
           ← 검토 이력
         </button>
       </NavBar>
 
+      {isUploading && (
+        <div className="max-w-2xl mx-auto px-6 pt-4">
+          <p className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+            파일 업로드 중입니다. 완료될 때까지 이 페이지를 벗어나지 마세요.
+          </p>
+        </div>
+      )}
+
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
         <UploadSection
           jobId={jobId} type="qualitative" label="정성제안서"
           files={byType("qualitative")} multiple={true}
           onUploaded={handleUploaded} onDeleted={handleDeleted}
+          onUploadingChange={(u) => handleUploadingChange("qualitative", u)}
         />
         <UploadSection
           jobId={jobId} type="quantitative" label="정량제안서"
           files={byType("quantitative")} multiple={true}
           onUploaded={handleUploaded} onDeleted={handleDeleted}
+          onUploadingChange={(u) => handleUploadingChange("quantitative", u)}
         />
         <UploadSection
           jobId={jobId} type="presentation" label="발표본"
           files={byType("presentation")} multiple={false}
           onUploaded={handleUploaded} onDeleted={handleDeleted}
+          onUploadingChange={(u) => handleUploadingChange("presentation", u)}
         />
 
         <div className="pt-2">
           <button
             onClick={() => setShowModal(true)}
-            disabled={files.length === 0}
+            disabled={files.length === 0 || isUploading}
             className="w-full bg-blue-600 text-white rounded-lg py-3 text-base font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             검토 시작
