@@ -582,7 +582,15 @@ async function confirmDeleteSelected(){
 
 async function createJob(){
   setBtn('new-btn',true,'+ 제안서 검토 요청','생성 중...');
-  try { const d=await api('/api/jobs',{method:'POST'}); openUpload(d.job_id); }
+  try {
+    // 이미 작성 중인(검토 시작 전) draft 건이 있으면 새로 만들지 않고 이어서 사용한다.
+    // (예: 업로드 중 이력 화면으로 갔다가 다시 "+ 제안서 검토 요청"을 누르는 경우
+    //  빈 draft 건이 계속 새로 생성되어 이력 목록에 파일없음 박스가 쌓이는 문제 방지)
+    const jobs = await api('/api/jobs');
+    const existingDraft = jobs.find(j=>j.status==='draft');
+    if (existingDraft) { openUpload(existingDraft.id); return; }
+    const d=await api('/api/jobs',{method:'POST'}); openUpload(d.job_id);
+  }
   catch(e){ toast(e.message||'검토 요청을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }
   finally { setBtn('new-btn',false,'+ 제안서 검토 요청','생성 중...'); }
 }
