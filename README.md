@@ -9,7 +9,6 @@
 | 항목 | 버전 |
 |------|------|
 | Python | 3.12 이상 |
-| Node.js | 18 이상 |
 | uv (Python 패키지 관리자) | 최신 |
 | Redis | 5.0 이상 (Windows는 포터블 빌드 또는 WSL2 사용) |
 
@@ -77,19 +76,11 @@ Start-Process "$env:USERPROFILE\redis-portable\redis-server.exe" `
 
 > 포터블 빌드 다운로드: https://github.com/tporadowski/redis/releases
 
-### 6. 프론트엔드 실행 (별도 터미널)
+### 6. 프론트엔드 실행
 
-```bash
-cd frontend
+프론트엔드는 빌드 과정이 없는 단일 HTML 파일(`index.html`)입니다. 백엔드 CORS 설정이 `http://127.0.0.1:5500`(VS Code "Live Server" 확장 기본 포트)을 허용하므로, 해당 포트로 정적 서버를 띄워 접속합니다. (`file://`로 직접 열면 CORS에 막혀 API 호출이 실패합니다.)
 
-# 의존성 설치
-npm install
-
-# 개발 서버 시작 (포트 3000)
-npm run dev
-```
-
-브라우저에서 http://localhost:3000 으로 접속합니다.
+로그인 화면 하단의 "서버 주소 변경"에서 API 주소(기본값 `http://localhost:8000`)를 확인/수정할 수 있습니다.
 
 ---
 
@@ -106,8 +97,9 @@ npm run dev
 
 | 레이어 | 기술 |
 |--------|------|
-| 백엔드 | FastAPI, SQLAlchemy (async), SQLite, Alembic |
+| 백엔드 | FastAPI, Supabase (PostgreSQL) |
 | AI | Anthropic Claude (claude-sonnet-4-6) |
 | 작업 큐 | Celery + Redis |
 | 파일 파싱 | python-pptx, python-docx, pdfplumber |
-| 프론트엔드 | Next.js 16 (App Router), TypeScript, Tailwind CSS |
+| 프론트엔드 | 단일 HTML 파일(`index.html`), vanilla JS — 빌드 과정 없음 |
+| 배포 | 백엔드: Railway · 프론트엔드: Vercel |
