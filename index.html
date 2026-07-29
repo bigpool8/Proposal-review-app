@@ -314,6 +314,7 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
   <div id="res-failed" style="display:none"></div>
   <div id="res-content" style="display:none">
     <div class="main">
+      <div id="res-ai-failure-banner"></div>
       <div class="summary-grid" id="res-summary"></div>
       <div style="display:flex;justify-content:flex-end;gap:.5rem;margin:1rem 0">
         <button class="btn btn-outline btn-sm" id="dl-pdf-btn" onclick="downloadPdf()">⬇ PDF 다운로드</button>
@@ -1076,6 +1077,18 @@ function renderResults(data){
   resultData = data;
   $('res-loading').style.display='none'; $('res-content').style.display='block';
   const s=data.summary;
+  const allFiles=data.proposal_types.flatMap(pt=>pt.files);
+  const failedFiles=allFiles.filter(f=>(f.parse_error||'').includes('전부 실패'));
+  const banner=$('res-ai-failure-banner');
+  banner.innerHTML = failedFiles.length ? `
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.625rem">
+      <svg width="20" height="20" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      <div style="flex:1">
+        <p class="bold" style="color:#991b1b;font-size:.9375rem">파일 ${failedFiles.length}개의 AI 검토가 실패했습니다</p>
+        <p class="text-sm" style="color:#b91c1c;margin-top:.25rem">아래 검출 건수(0건 포함)는 이 파일들에 한해 신뢰할 수 없습니다. 파일별 상세 사유는 해당 파일 카드에서 확인하세요. 원인(예: AI 서비스 크레딧 부족)을 해결한 뒤 다시 시도하면 이 검토 건 전체가 재검토됩니다.</p>
+        <button class="btn btn-primary btn-sm" style="margin-top:.75rem" onclick="doRetry()">다시 시도</button>
+      </div>
+    </div>` : '';
   const hasSuperlative=data.superlative_eval!==false;
   const hasTypo=data.typo_eval!==false;
   const hasBlind=data.blind_eval;
@@ -1106,7 +1119,9 @@ function renderResults(data){
       const blds=f.results.filter(r=>r.category==='blind');
       const bldImgs=f.results.filter(r=>r.category==='blind_image');
       let bHtml='';
-      if(f.parse_error) bHtml+=`<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">이 파일 처리 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
+      const isTotalFail=(f.parse_error||'').includes('전부 실패');
+      if(f.parse_error) bHtml+= isTotalFail ? `<div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#991b1b;font-weight:600">✕ 검토 실패 — 이 파일은 검토되지 못했습니다</p><p class="text-xs" style="color:#b91c1c;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`
+        : `<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">이 파일 처리 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
       if(!f.results.length&&!f.parse_error) bHtml+=`<div class="result-clean"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>검출된 이슈 없음 — 이 파일에서 ${esc(activeLabels)}이(가) 발견되지 않았습니다.</div>`;
       if(sups.length){
         bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">최상급 표현(허위·과장 가능 문구) (${sups.length}건)</span></div>`;

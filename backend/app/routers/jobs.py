@@ -852,10 +852,13 @@ def retry_job(
     from app.workers.review_task import run_review_sync
 
     job = _get_job(job_id, current_user["id"], sb, with_files=True)
-    if job["status"] != "failed":
-        raise HTTPException(status_code=409, detail="failed 상태인 검토 건만 재시도할 수 있습니다.")
-
     file_ids = [f["id"] for f in (job.get("review_files") or [])]
+    # AI 호출이 전부 실패해 실질적으로 검토되지 못한 completed 건도 재시도를 허용한다
+    # (job 자체는 예외 없이 끝까지 처리되었으므로 status가 failed가 아니라 completed로 남음).
+    has_total_ai_failure = any("전부 실패" in (f.get("parse_error") or "") for f in (job.get("review_files") or []))
+    if job["status"] != "failed" and not (job["status"] == "completed" and has_total_ai_failure):
+        raise HTTPException(status_code=409, detail="failed 상태이거나 AI 검토가 전부 실패한 건만 재시도할 수 있습니다.")
+
     if file_ids:
         sb.table("review_results").delete().in_("file_id", file_ids).execute()
         sb.table("review_files").update({"parse_error": None, "total_pages": None}).in_("id", file_ids).execute()

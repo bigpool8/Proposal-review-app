@@ -690,7 +690,13 @@ def _run_detections(
     if llm_rows:
         sb.table("review_results").insert(llm_rows).execute()
     if llm_failed:
-        failure_notes.append(f"최상급 표현/오타 검출 중 {llm_failed}/{len(chunks)}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
+        if chunks and llm_failed == len(chunks):
+            # 전체 구간이 실패 — 부분 미완성이 아니라 이 항목 자체가 검토되지 못한 것이므로
+            # "불완전할 수 있음" 같은 완곡한 표현 대신 명확히 실패로 표시한다
+            # (프론트엔드가 "전부 실패했습니다" 문구로 이 상태를 감지해 강조 표시함).
+            failure_notes.append("최상급 표현/오타 검출이 전부 실패했습니다 (AI 호출 오류로 이 항목은 검토되지 못했습니다).")
+        else:
+            failure_notes.append(f"최상급 표현/오타 검출 중 {llm_failed}/{len(chunks)}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
 
     # 블라인드 평가: 텍스트 직접 검색
     if blind_keywords:
@@ -704,7 +710,10 @@ def _run_detections(
     if competitor_eval:
         comp_total, comp_failed = _detect_competitor_expressions(sb, client, review_file, competitor_keywords or [], pages)
         if comp_failed:
-            failure_notes.append(f"경쟁사 비교/비방 표현 검출 중 {comp_failed}/{comp_total}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
+            if comp_total and comp_failed == comp_total:
+                failure_notes.append("경쟁사 비교/비방 표현 검출이 전부 실패했습니다 (AI 호출 오류로 이 항목은 검토되지 못했습니다).")
+            else:
+                failure_notes.append(f"경쟁사 비교/비방 표현 검출 중 {comp_failed}/{comp_total}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
 
     if failure_notes:
         current = sb.table("review_files").select("parse_error").eq("id", review_file["id"]).execute()
