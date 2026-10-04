@@ -430,8 +430,8 @@ def _detect_blind_in_images(
     """추출된 이미지에서 Claude vision으로 회사 식별정보를 검출.
 
     각 이미지에 대한 Claude API 호출을 ThreadPoolExecutor로 병렬 실행한다.
-    logo_cache / text_cache는 CPython GIL 하에서 dict 단순 읽기·쓰기가 원자적이므로
-    별도 Lock 없이 공유한다 (동일 hash 이미지의 경우 최악에도 중복 API 호출 1회 수준).
+    logo_cache / text_cache / combined_cache는 CPython GIL 하에서 dict 단순 읽기·쓰기가
+    원자적이므로 별도 Lock 없이 공유한다 (동일 hash 이미지의 경우 최악에도 중복 API 호출 1회 수준).
     """
     if not images:
         return
@@ -456,8 +456,12 @@ def _detect_blind_in_images(
     # 동일 이미지에 대해 Claude API 중복 호출 방지 (레이아웃 공통 이미지 등)
     # logo_cache: img_hash -> (is_logo, logo_text)
     # text_cache: img_hash -> (found_kws, image_description)
+    # combined_cache: img_hash -> (is_logo, logo_text, found_kws, image_description)
+    #   로고 참조와 텍스트 키워드가 모두 있고 개별 추출 이미지(페이지 렌더 아님)인 경우,
+    #   원래 순차로 2번 호출하던 로고 매칭 + 텍스트 키워드 탐지를 1번의 Claude 호출로 병합한다.
     logo_cache: dict[int, tuple[bool, str]] = {}
     text_cache: dict[int, tuple[list[str], str]] = {}
+    combined_cache: dict[int, tuple[bool, str, list[str], str]] = {}
     # 용량 초과로 검출을 건너뛴 페이지 — list.append는 GIL 하에서 원자적이므로 Lock 불필요
     oversized_pages: list[int] = []
 
@@ -486,10 +490,73 @@ def _detect_blind_in_images(
         img_b64: str | None = None
         local_rows: list[dict] = []
 
-        # ── 1. 로고 이미지 시각적 유사도 비교 (참조 로고 여러 개 지원) ──
         is_logo = False
         logo_text = ""
-        if logo_refs:
+        found_kws: list[str] = []
+        image_description = ""
+        want_logo = bool(logo_refs)
+        # 페이지 렌더는 전체 페이지 텍스트가 포함되어 오탐이 발생하므로 텍스트 키워드 탐지는 건너뜀
+        want_text = bool(text_keywords) and not is_page_render
+
+        if want_logo and want_text:
+            # ── 로고 매칭 + 텍스트 키워드 탐지를 한 번의 Claude 호출로 병합 ──
+            # (개별 추출 이미지에서만 발생 — 페이지 렌더는 want_text가 False라 이 분기에 오지 않음)
+            if img_hash in combined_cache:
+                is_logo, logo_text, found_kws, image_description = combined_cache[img_hash]
+            else:
+                if img_b64 is None:
+                    img_b64 = base64.b64encode(img_bytes).decode()
+                logo_ref_content = [
+                    {"type": "image", "source": {"type": "base64", "media_type": ref["mime"], "data": ref["b64"]}}
+                    for ref in logo_refs
+                ]
+                kw_list = ", ".join(f'"{k}"' for k in text_keywords)
+                try:
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=350,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"다음은 참조 로고 이미지입니다 (총 {len(logo_refs)}개):"},
+                                *logo_ref_content,
+                                {"type": "text", "text": "다음은 문서에서 추출된 이미지입니다:"},
+                                {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": img_b64}},
+                                {"type": "text", "text": (
+                                    "아래 두 가지를 모두 확인하세요.\n"
+                                    "1) 마지막 이미지가 위 참조 로고 중 하나와 시각적으로 동일한 로고/브랜드 그래픽인지. "
+                                    "주의: 마지막 이미지가 계약서·평가서·증명서·공문 등 문서 이미지이거나, "
+                                    "회사명이 텍스트로만 표기된 경우에는 반드시 is_same_logo: false로 답하세요.\n"
+                                    "로고인 경우 logo_text에 로고에 보이는 텍스트(예: 'LG U+')를 입력하세요.\n"
+                                    f"2) 다음 텍스트가 이미지 안에 보이는지 확인하세요: {kw_list}\n"
+                                    "image_description에 이미지 종류를 한국어로 간략히 설명하세요"
+                                    "(예: '신용평가서 문서', '건물 사진', '로고 이미지', '슬라이드 배경').\n"
+                                    "JSON으로만 답변 (다른 텍스트 금지):\n"
+                                    '{"is_same_logo": true, "confidence": "high", "logo_text": "LG U+", '
+                                    '"found": [{"text": "검색어", "visible": true}], "image_description": "이미지 종류"}'
+                                )},
+                            ],
+                        }],
+                    )
+                    raw = resp.content[0].text.strip()
+                    if raw.startswith("```"):
+                        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
+                    data = json.loads(raw)
+                    is_logo = bool(data.get("is_same_logo") and data.get("confidence") in ("high", "medium"))
+                    logo_text = data.get("logo_text", "").strip() if is_logo else ""
+                    found_kws = [item["text"] for item in data.get("found", []) if item.get("visible")]
+                    image_description = data.get("image_description", "").strip()
+                except Exception:
+                    pass
+                combined_cache[img_hash] = (is_logo, logo_text, found_kws, image_description)
+
+            if is_logo:
+                # 이미 로고로 판단된 이미지는 텍스트 검출 결과를 중복 플래깅하지 않음
+                # (기존 순차 호출 방식에서 "로고면 텍스트 탐지는 건너뛴다"던 동작과 동일하게 유지)
+                found_kws = []
+
+        elif want_logo:
+            # ── 로고 이미지 시각적 유사도 비교만 수행 (참조 로고 여러 개 지원) ──
             if img_hash in logo_cache:
                 is_logo, logo_text = logo_cache[img_hash]
             else:
@@ -560,26 +627,11 @@ def _detect_blind_in_images(
                     pass
                 logo_cache[img_hash] = (is_logo, logo_text)
 
-            if is_logo:
-                logo_ctx = f"로고 이미지({logo_text}) 검출" if logo_text else "로고 이미지 검출"
-                local_rows.append({
-                    "id": str(uuid.uuid4()),
-                    "file_id": review_file["id"],
-                    "category": "blind_image",
-                    "detected_text": logo_text if logo_text else "로고",
-                    "suggestion": None,
-                    "page_number": page_num,
-                    "context": logo_ctx,
-                })
-
-        # ── 2. 이미지 안에 회사명/대표자명 텍스트가 있는지 (로고·페이지 렌더 제외) ──
-        # 페이지 렌더는 전체 페이지 텍스트가 포함되어 오탐이 발생하므로 건너뜀
-        if text_keywords and not is_logo and not is_page_render:
+        elif want_text:
+            # ── 텍스트 키워드 탐지만 수행 ──
             if img_hash in text_cache:
                 found_kws, image_description = text_cache[img_hash]
             else:
-                found_kws = []
-                image_description = ""
                 if img_b64 is None:
                     img_b64 = base64.b64encode(img_bytes).decode()
                 kw_list = ", ".join(f'"{k}"' for k in text_keywords)
@@ -611,20 +663,32 @@ def _detect_blind_in_images(
                     pass
                 text_cache[img_hash] = (found_kws, image_description)
 
-            for kw_text in found_kws:
-                if image_description:
-                    img_ctx = f"{image_description} 이미지에서 '{kw_text}' 텍스트 검출"
-                else:
-                    img_ctx = f"이미지에서 '{kw_text}' 텍스트 검출"
-                local_rows.append({
-                    "id": str(uuid.uuid4()),
-                    "file_id": review_file["id"],
-                    "category": "blind_image",
-                    "detected_text": kw_text,
-                    "suggestion": None,
-                    "page_number": page_num,
-                    "context": img_ctx,
-                })
+        if is_logo:
+            logo_ctx = f"로고 이미지({logo_text}) 검출" if logo_text else "로고 이미지 검출"
+            local_rows.append({
+                "id": str(uuid.uuid4()),
+                "file_id": review_file["id"],
+                "category": "blind_image",
+                "detected_text": logo_text if logo_text else "로고",
+                "suggestion": None,
+                "page_number": page_num,
+                "context": logo_ctx,
+            })
+
+        for kw_text in found_kws:
+            if image_description:
+                img_ctx = f"{image_description} 이미지에서 '{kw_text}' 텍스트 검출"
+            else:
+                img_ctx = f"이미지에서 '{kw_text}' 텍스트 검출"
+            local_rows.append({
+                "id": str(uuid.uuid4()),
+                "file_id": review_file["id"],
+                "category": "blind_image",
+                "detected_text": kw_text,
+                "suggestion": None,
+                "page_number": page_num,
+                "context": img_ctx,
+            })
 
         return local_rows
 
