@@ -134,17 +134,43 @@ TYPO_INSTRUCTIONS = """오타: 한글 또는 영문 맞춤법/철자 오류
    - 수정 제안은 1개만 제시
    - category는 "typo", suggestion에 수정 제안 텍스트"""
 
+COMPETITOR_INSTRUCTIONS = """경쟁사 비교 및 비방 표현
+   검출 대상:
+   1. 경쟁사 직접 비교: 특정 회사·제품을 직접 거론하며 우열을 비교하는 표현
+      예) "A사 솔루션과 달리", "경쟁사 제품 대비 2배 빠른", "타사 대비 우수한"
+   2. 경쟁사 간접 비방: 명시적인 회사명은 없지만 시장의 다른 업체·솔루션 전반을
+      부정적으로 묘사하는 표현
+      예) "시장에 존재하는 기존 솔루션들의 공통적인 한계를 극복", "타 업체 제품들의 고질적인 문제점을 해결"
+   3. 근거 없는 비교 우위 주장: 객관적 근거 없이 경쟁 우위를 주장하는 표현
+      예) "타사 대비 압도적인 성능", "경쟁사가 따라올 수 없는 기술력"
+   검출 제외:
+   - 자사 제품·서비스의 사실에 기반한 특장점 설명
+   - 업계 전체 트렌드나 시장 환경에 대한 객관적 서술
+   - 특정 회사를 지칭하지 않는 일반적 표현
+   - "기존 X 대비 Y% 개선/절감"처럼 이전 세대 사양(본 사업·본 시스템 자체의 구형
+     스펙, 또는 일반적인 이전 기술 수준) 대비 자사가 제안하는 신규 사양의 성능
+     개선치를 설명하는 표현. 특정 경쟁사·타사를 명시하거나 강하게 암시하지 않는
+     한 이는 경쟁사 비교가 아니라 자사 제품의 개선 수치 설명이므로 검출하지 말 것
+     (예: "기존 카메라 화소 대비 2.5배 개선된 화소", "기존 시스템 대비 약 50%
+     소비전력 절감" 은 모두 검출 제외)
+   - category는 "competitor", suggestion에 객관적 표현으로 수정 제안"""
 
-def _build_llm_system_prompt(superlative_eval: bool, typo_eval: bool) -> str | None:
-    """superlative/typo 검출 항목 선택에 따라 LLM system prompt를 동적으로 구성.
 
-    둘 다 꺼져 있으면 None을 반환해 호출자가 아예 이 검출 단계를 건너뛰게 한다.
+def _build_llm_system_prompt(superlative_eval: bool, typo_eval: bool, competitor_eval: bool) -> str | None:
+    """선택된 검출 항목에 따라 LLM system prompt를 동적으로 구성.
+
+    셋 다 꺼져 있으면 None을 반환해 호출자가 아예 이 검출 단계를 건너뛰게 한다.
+    활성화된 항목을 하나의 system prompt로 합쳐, 같은 페이지 텍스트를 항목별로
+    중복 전송하지 않고 청크당 Claude 호출을 1번만 수행한다 (과거에는 경쟁사 검출이
+    별도 호출로 동일한 페이지 텍스트를 다시 보냈음).
     """
     sections = []
     if superlative_eval:
         sections.append(SUPERLATIVE_INSTRUCTIONS)
     if typo_eval:
         sections.append(TYPO_INSTRUCTIONS)
+    if competitor_eval:
+        sections.append(COMPETITOR_INSTRUCTIONS)
     if not sections:
         return None
     numbered = "\n\n".join(f"{i + 1}. {text}" for i, text in enumerate(sections))
@@ -168,10 +194,10 @@ def _build_llm_system_prompt(superlative_eval: bool, typo_eval: bool) -> str | N
 결과가 없으면 {{"results": []}} 반환."""
 
 
-def _build_user_prompt(filename: str, pages: list[dict]) -> str:
+def _build_user_prompt(filename: str, pages: list[dict], kw_note: str = "") -> str:
     start = pages[0]["page_number"]
     end = pages[-1]["page_number"]
-    lines = [f"아래는 {filename}의 {start}~{end} 페이지 내용입니다. 검토해주세요.\n"]
+    lines = [f"아래는 {filename}의 {start}~{end} 페이지 내용입니다. 검토해주세요.{kw_note}\n"]
     for page in pages:
         lines.append(f"[{page['page_number']}페이지]")
         lines.append(page["text"] or "(내용 없음)")
@@ -179,12 +205,14 @@ def _build_user_prompt(filename: str, pages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _call_llm(client: Anthropic, filename: str, pages: list[dict], system_prompt: str) -> list[dict]:
+def _call_llm(client: Anthropic, filename: str, pages: list[dict], system_prompt: str, kw_note: str = "") -> list[dict]:
+    # system prompt는 검출 항목 조합별로 고정 문자열이라, 동일 조합으로 반복
+    # 호출될 때(같은 job의 다른 청크, 또는 다른 job) 캐시 적중 시 비용이 절감된다.
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4096,
-        system=system_prompt,
-        messages=[{"role": "user", "content": _build_user_prompt(filename, pages)}],
+        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": _build_user_prompt(filename, pages, kw_note)}],
     )
     if not response.content or not hasattr(response.content[0], "text"):
         return []
@@ -198,117 +226,6 @@ def _call_llm(client: Anthropic, filename: str, pages: list[dict], system_prompt
     except json.JSONDecodeError as e:
         logger.warning("LLM JSON 파싱 실패 (%s): %s | raw: %.200s", filename, e, raw)
         return []
-
-
-COMPETITOR_SYSTEM_PROMPT = """당신은 컨설팅 제안서를 검토하는 전문 편집자입니다.
-주어진 텍스트에서 경쟁사 비교 및 비방 표현을 검출해야 합니다.
-
-검출 대상:
-1. 경쟁사 직접 비교: 특정 회사·제품을 직접 거론하며 우열을 비교하는 표현
-   예) "A사 솔루션과 달리", "경쟁사 제품 대비 2배 빠른", "타사 대비 우수한"
-2. 경쟁사 간접 비방: 명시적인 회사명은 없지만 시장의 다른 업체·솔루션 전반을
-   부정적으로 묘사하는 표현
-   예) "시장에 존재하는 기존 솔루션들의 공통적인 한계를 극복", "타 업체 제품들의 고질적인 문제점을 해결"
-3. 근거 없는 비교 우위 주장: 객관적 근거 없이 경쟁 우위를 주장하는 표현
-   예) "타사 대비 압도적인 성능", "경쟁사가 따라올 수 없는 기술력"
-
-검출 제외:
-- 자사 제품·서비스의 사실에 기반한 특장점 설명
-- 업계 전체 트렌드나 시장 환경에 대한 객관적 서술
-- 특정 회사를 지칭하지 않는 일반적 표현
-- "기존 X 대비 Y% 개선/절감"처럼 이전 세대 사양(본 사업·본 시스템 자체의 구형
-  스펙, 또는 일반적인 이전 기술 수준) 대비 자사가 제안하는 신규 사양의 성능
-  개선치를 설명하는 표현. 특정 경쟁사·타사를 명시하거나 강하게 암시하지 않는
-  한 이는 경쟁사 비교가 아니라 자사 제품의 개선 수치 설명이므로 검출하지 말 것
-  (예: "기존 카메라 화소 대비 2.5배 개선된 화소", "기존 시스템 대비 약 50%
-  소비전력 절감" 은 모두 검출 제외)
-
-출력 형식은 반드시 아래 JSON 형식을 따르세요. JSON 외 다른 텍스트는 출력하지 마세요:
-{
-  "results": [
-    {
-      "category": "competitor",
-      "detected_text": "검출된 텍스트",
-      "suggestion": "객관적 표현으로 수정 제안",
-      "page_number": 페이지번호(정수),
-      "context": "검출된 텍스트를 포함한 전후 1~2문장"
-    }
-  ]
-}
-결과가 없으면 {"results": []} 반환."""
-
-
-def _call_competitor_llm(client: Anthropic, filename: str, pages: list[dict], competitor_keywords: list) -> list[dict]:
-    kw_names = [kw.get("value", "").strip() for kw in competitor_keywords if kw.get("value", "").strip()]
-    kw_note = ""
-    if kw_names:
-        kw_list = ", ".join(f'"{k}"' for k in kw_names)
-        kw_note = f"\n\n[주의] 다음 경쟁사명이 비교·비방 맥락에서 언급되면 반드시 검출하세요: {kw_list}"
-    start = pages[0]["page_number"]
-    end = pages[-1]["page_number"]
-    lines = [f"아래는 {filename}의 {start}~{end} 페이지 내용입니다. 검토해주세요.{kw_note}\n"]
-    for page in pages:
-        lines.append(f"[{page['page_number']}페이지]")
-        lines.append(page["text"] or "(내용 없음)")
-        lines.append("")
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        system=COMPETITOR_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": "\n".join(lines)}],
-    )
-    if not response.content or not hasattr(response.content[0], "text"):
-        return []
-    raw = response.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = "\n".join(l for l in raw.split("\n") if not l.startswith("```")).strip()
-    try:
-        data = json.loads(raw)
-        return data.get("results", [])
-    except json.JSONDecodeError as e:
-        logger.warning("경쟁사 LLM JSON 파싱 실패 (%s): %s | raw: %.200s", filename, e, raw)
-        return []
-
-
-def _detect_competitor_expressions(sb, client: Anthropic, review_file: dict, competitor_keywords: list, pages: list[dict]) -> tuple[int, int]:
-    """LLM으로 경쟁사 비교/비방 표현을 검출 (방식 A + B 혼합).
-
-    - 방식 A: 프롬프트 기반 자동 검출 (경쟁사명 없이도 동작)
-    - 방식 B: competitor_keywords 제공 시 해당 회사명이 비교·비방 맥락에서 언급되는지 LLM이 판단
-
-    반환값: (총 청크 수, 실패한 청크 수) — 호출자가 실패율을 판단해 사용자에게 경고할 수 있도록.
-    """
-    chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
-    rows: list[dict] = []
-    failed = 0
-    if chunks:
-        with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
-            futures = {
-                pool.submit(_call_competitor_llm, client, review_file["original_filename"], chunk, competitor_keywords): chunk
-                for chunk in chunks
-            }
-            for fut in as_completed(futures):
-                try:
-                    items = fut.result()
-                except Exception as exc:
-                    logger.warning("경쟁사 LLM 청크 오류 (%s): %s", review_file["original_filename"], exc)
-                    items = []
-                    failed += 1
-                chunk_text = "\n".join(p.get("text") or "" for p in futures[fut])
-                for item in items:
-                    if item.get("category") == "competitor" and _is_grounded(item.get("detected_text", ""), chunk_text):
-                        rows.append({
-                            "id": str(uuid.uuid4()),
-                            "file_id": review_file["id"],
-                            "category": "competitor",
-                            "detected_text": item.get("detected_text", ""),
-                            "suggestion": item.get("suggestion"),
-                            "page_number": int(item.get("page_number", 0)),
-                            "context": item.get("context"),
-                        })
-    if rows:
-        sb.table("review_results").insert(rows).execute()
-    return len(chunks), failed
 
 
 def _expand_keyword(value: str) -> list[str]:
@@ -762,19 +679,26 @@ def _run_detections(
     competitor_eval: bool,
     competitor_keywords: list | None,
 ) -> None:
-    # LLM 기반 검출 (최상급 표현 + 오타, 선택된 항목만) — 청크 병렬 처리
+    # LLM 기반 검출 (최상급 표현 + 오타 + 경쟁사 비교/비방, 선택된 항목만) — 청크 병렬 처리.
+    # 세 항목을 하나의 system prompt로 합쳐 청크당 Claude 호출을 1번만 수행한다
+    # (과거에는 경쟁사 검출이 별도 호출로 동일한 페이지 텍스트를 다시 전송했음).
     # 각 청크는 독립적이므로 ThreadPoolExecutor로 동시 호출 가능.
     # 결과 수집은 메인 스레드에서만 이루어지므로 llm_rows 동시 접근 없음.
     failure_notes: list[str] = []
 
-    system_prompt = _build_llm_system_prompt(superlative_eval, typo_eval)
+    system_prompt = _build_llm_system_prompt(superlative_eval, typo_eval, competitor_eval)
     chunks = [pages[i:i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)] if system_prompt else []
+    kw_note = ""
+    comp_kw_names = [kw.get("value", "").strip() for kw in (competitor_keywords or []) if kw.get("value", "").strip()]
+    if competitor_eval and comp_kw_names:
+        kw_list = ", ".join(f'"{k}"' for k in comp_kw_names)
+        kw_note = f"\n\n[주의] 다음 경쟁사명이 비교·비방 맥락에서 언급되면 반드시 검출하세요: {kw_list}"
     llm_rows: list[dict] = []
     llm_failed = 0
     if chunks:
         with ThreadPoolExecutor(max_workers=LLM_MAX_WORKERS) as pool:
             futures = {
-                pool.submit(_call_llm, client, review_file["original_filename"], chunk, system_prompt): chunk
+                pool.submit(_call_llm, client, review_file["original_filename"], chunk, system_prompt, kw_note): chunk
                 for chunk in chunks
             }
             for fut in as_completed(futures):
@@ -811,13 +735,21 @@ def _run_detections(
     if llm_rows:
         sb.table("review_results").insert(llm_rows).execute()
     if llm_failed:
+        labels = []
+        if superlative_eval:
+            labels.append("최상급 표현")
+        if typo_eval:
+            labels.append("오타")
+        if competitor_eval:
+            labels.append("경쟁사 비교/비방 표현")
+        label = "/".join(labels)
         if chunks and llm_failed == len(chunks):
             # 전체 구간이 실패 — 부분 미완성이 아니라 이 항목 자체가 검토되지 못한 것이므로
             # "불완전할 수 있음" 같은 완곡한 표현 대신 명확히 실패로 표시한다
             # (프론트엔드가 "전부 실패했습니다" 문구로 이 상태를 감지해 강조 표시함).
-            failure_notes.append("최상급 표현/오타 검출이 전부 실패했습니다 (AI 호출 오류로 이 항목은 검토되지 못했습니다).")
+            failure_notes.append(f"{label} 검출이 전부 실패했습니다 (AI 호출 오류로 이 항목은 검토되지 못했습니다).")
         else:
-            failure_notes.append(f"최상급 표현/오타 검출 중 {llm_failed}/{len(chunks)}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
+            failure_notes.append(f"{label} 검출 중 {llm_failed}/{len(chunks)}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
 
     # 블라인드 평가: 텍스트 직접 검색
     if blind_keywords:
@@ -826,15 +758,6 @@ def _run_detections(
     # 블라인드 평가: 이미지 검출 (회사명/대표자명 텍스트 + 로고)
     if blind_keywords or logo_paths:
         _detect_blind_in_images(sb, client, review_file, blind_keywords, logo_paths, images)
-
-    # 경쟁사 비교/비방 표현 검출
-    if competitor_eval:
-        comp_total, comp_failed = _detect_competitor_expressions(sb, client, review_file, competitor_keywords or [], pages)
-        if comp_failed:
-            if comp_total and comp_failed == comp_total:
-                failure_notes.append("경쟁사 비교/비방 표현 검출이 전부 실패했습니다 (AI 호출 오류로 이 항목은 검토되지 못했습니다).")
-            else:
-                failure_notes.append(f"경쟁사 비교/비방 표현 검출 중 {comp_failed}/{comp_total}개 구간에서 AI 호출이 실패했습니다. 검출 결과가 불완전할 수 있습니다.")
 
     if failure_notes:
         current = sb.table("review_files").select("parse_error").eq("id", review_file["id"]).execute()
