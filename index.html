@@ -541,7 +541,6 @@ input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5
           <p class="res-sub" id="res-subline"></p>
         </div>
         <div class="flex gap-2" style="flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" id="redo-review-btn" onclick="confirmRedoReview()">↻ 다시 검토</button>
           <button class="btn btn-outline btn-sm" id="dl-pdf-btn" onclick="downloadPdf()">⬇ PDF 다운로드</button>
           <button class="btn btn-outline btn-sm" id="dl-word-btn" onclick="downloadWord()">⬇ Word 다운로드</button>
         </div>
@@ -1261,11 +1260,6 @@ async function poll(){
 async function doRetry(){
   try { await api('/api/jobs/'+jobId+'/retry',{method:'POST'}); openResults(jobId); }
   catch(e){ toast(e.message||'재시도에 실패했습니다. 잠시 후 다시 시도해 주세요.','error'); }
-}
-
-function confirmRedoReview(){
-  if(!confirm('기존 검출 결과를 모두 지우고 전체 파일을 처음부터 다시 검토합니다. 계속할까요?')) return;
-  doRetry();
 }
 
 function friendlyError(msg){
