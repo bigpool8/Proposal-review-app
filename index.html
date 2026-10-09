@@ -434,7 +434,7 @@ input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5
     <h1 style="font-size:1.5rem;font-weight:700;color:#111827">제안서 검토 요청</h1>
     <p class="text-sm text-gray mt-1">검토할 파일을 올리고 검출 항목을 선택하세요. 문서 분량에 따라 수 분이 걸릴 수 있습니다.</p>
 
-    <div class="step-label"><span class="step-num">01</span><span class="step-title">파일 업로드</span></div>
+    <div class="step-label"><span class="step-num">01</span><span class="step-title">파일 업로드</span><span class="step-extra">PPT · PPTX · DOC · DOCX · PDF</span></div>
     <div class="upload-grid">
       <div id="sec-qualitative"></div>
       <div id="sec-quantitative"></div>
@@ -472,7 +472,7 @@ input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5
       <div class="det-card">
         <div class="det-card-top" onclick="toggleDetCard(event,'blind-eval-chk')">
           <span class="det-icon tag-bld">식</span>
-          <div class="det-card-text"><p class="det-title">블라인드 평가</p><p class="det-desc">회사명·로고·연락처 등 회사 식별정보를 텍스트와 이미지에서 찾습니다.</p></div>
+          <div class="det-card-text"><p class="det-title">블라인드 평가</p><p class="det-desc">회사명·로고·대표자명 등 회사 식별정보를 텍스트와 이미지에서 찾습니다.</p></div>
           <input type="checkbox" id="blind-eval-chk" onchange="toggleBlindEval()">
         </div>
         <div id="blind-eval-section" class="det-sub" style="display:none">
@@ -1462,7 +1462,7 @@ function adviceText(cat, det){
     return `"${d}"는 객관적 근거 없이 쓰이면 허위·과장 표현으로 판단될 수 있습니다.`;
   }
   if (cat==='competitor') return '경쟁사를 직접 언급한 우위 주장은 감점 사유가 될 수 있습니다. 자사 실적 중심으로 서술하세요.';
-  if (cat==='blind') return '회사 브랜드·연락처 표기는 제안사를 특정할 수 있어 블라인드 평가 위반 소지가 있습니다.';
+  if (cat==='blind') return '회사 브랜드 표기는 제안사를 특정할 수 있어 블라인드 평가 위반 소지가 있습니다.';
   if (cat==='blind_image') return '로고·CI 이미지는 블라인드 평가 시 삭제하거나 가려야 합니다.';
   return '';
 }
