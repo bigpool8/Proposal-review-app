@@ -4,121 +4,250 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>제안서 검증 AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
+:root{
+  --pink:#EB008B; --pink-dark:#C8007A; --pink-hover:#A30063;
+  --pink-bg:#FDE7F3; --pink-bg-soft:#FFF5FA;
+  --ink:#0A0A0A;
+  --r-card:14px; --r-input:10px;
+  --ctrl-h:48px;
+  --font-sans:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sup-bg:#FEF3C7; --sup-text:#92400E; --sup-accent:#D97706;
+  --typ-bg:#EDE9FE; --typ-text:#5B21B6; --typ-accent:#7C3AED;
+  --cmp-bg:#CCFBF1; --cmp-text:#115E59; --cmp-accent:#0D9488;
+  --bld-bg:#DBEAFE; --bld-text:#1E40AF; --bld-accent:#2563EB;
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;color:#111827}
+body{font-family:var(--font-sans);background:#f9fafb;color:#111827}
+.mono{font-family:var(--font-mono)}
 .page{display:none;min-height:100vh}.page.active{display:block}
-nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.auth-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#f5f3ff 0%,#eff6ff 50%,#f5f3ff 100%)}
-#page-login .auth-wrap{justify-content:flex-start;padding-top:10vh}
-.auth-title{font-size:2rem;font-weight:700;color:#7c3aed;margin-bottom:2rem}
-.auth-box{background:#fff;border-radius:1rem;box-shadow:0 20px 45px -20px rgba(124,58,237,.22),0 2px 8px rgba(0,0,0,.04);border:1px solid #f3f4f6;padding:3rem;width:100%;max-width:28rem}
-.auth-box .input-icon{position:relative}
-.auth-box .input-icon>.icon{position:absolute;left:.875rem;top:50%;transform:translateY(-50%);font-size:1rem;color:#9ca3af;pointer-events:none;z-index:1}
-.auth-box .input-icon>input[type=text],.auth-box .input-icon>.pw-wrap input{padding-left:2.75rem}
-.auth-box .btn-primary{transition:background .15s,transform .15s,box-shadow .15s}
-.auth-box .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 20px rgba(37,99,235,.28)}
-.auth-box .btn-primary:active:not(:disabled){transform:translateY(0);box-shadow:0 2px 6px rgba(37,99,235,.2)}
+
+/* ── 공통 내비게이션 ──────────────────────────────────── */
+.app-nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:.875rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;gap:1rem;flex-wrap:wrap}
+.nav-left{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.nav-brand{display:flex;align-items:center;gap:.5rem}
+.logo-icon{width:28px;height:28px;border-radius:8px;background:var(--pink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-text{font-size:1.0625rem;font-weight:700;color:#111827}
+.nav-tabs{display:flex;gap:.25rem;background:#f3f4f6;padding:.25rem;border-radius:999px}
+.nav-tab{border:none;background:none;cursor:pointer;font-family:var(--font-sans);font-size:.875rem;font-weight:600;color:#6b7280;padding:.4rem 1rem;border-radius:999px;transition:background .15s,color .15s}
+.nav-tab:hover{color:#374151}
+.nav-tab.active{background:#fff;color:var(--pink-dark);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.nav-right{display:flex;align-items:center;gap:.75rem}
+.user-block{display:inline-flex;align-items:center;gap:.5rem}
+.avatar{width:1.75rem;height:1.75rem;border-radius:50%;background:var(--pink-bg);color:var(--pink-dark);font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.user-name{font-size:.875rem;font-weight:600;color:#374151}
+
+/* ── 인증 화면 (분할 레이아웃) ──────────────────────────── */
+.auth-shell{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
+.auth-brand-panel{background:var(--ink);color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:3rem 3.5rem}
+.auth-brand-top .nav-brand .logo-text{color:#fff}
+.auth-eyebrow{font-family:var(--font-mono);font-size:.75rem;letter-spacing:.12em;color:#9ca3af;margin:3.5rem 0 1rem}
+.auth-headline{font-size:2rem;font-weight:700;line-height:1.3;color:#fff}
+.auth-headline .hl{color:var(--pink)}
+.auth-desc{color:#9ca3af;font-size:.9375rem;line-height:1.7;margin:1.25rem 0 2rem;max-width:30rem}
+.auth-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem 2rem;max-width:30rem}
+.auth-feature{display:flex;gap:.625rem;align-items:flex-start}
+.auth-feature .dot{width:.5rem;height:.5rem;border-radius:50%;margin-top:.5rem;flex-shrink:0}
+.auth-feature-title{font-size:.9375rem;font-weight:700;color:#fff}
+.auth-feature-desc{font-size:.8125rem;color:#9ca3af;margin-top:.125rem}
+.auth-footer{color:#6b7280;font-size:.8125rem}
+.auth-form-panel{display:flex;align-items:center;justify-content:center;padding:2.5rem 1.5rem;background:#f9fafb}
+.auth-form-wrap{width:100%;max-width:26rem}
+.auth-form-title{font-size:1.5rem;font-weight:700;color:#111827;margin-bottom:.375rem}
+.auth-form-sub{color:#6b7280;font-size:.875rem;margin-bottom:2rem}
 .form-group{margin-bottom:1.25rem}
-label{display:block;font-size:1rem;font-weight:500;color:#374151;margin-bottom:.5rem}
-input[type=text],input[type=password]{width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.75rem 1rem;font-size:1rem;outline:none;transition:box-shadow .15s}
-input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
-.btn{border:none;cursor:pointer;font-size:.9375rem;font-weight:500;border-radius:.5rem;padding:.625rem 1.125rem;transition:background .15s,opacity .15s}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-full{width:100%;padding:.75rem 1rem;font-size:1rem}
-.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover:not(:disabled){background:#1d4ed8}
-.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover:not(:disabled){background:#dc2626}
-.btn-slate{background:#475569;color:#fff}.btn-slate:hover:not(:disabled){background:#334155}
-.btn-outline{background:#fff;color:#374151;border:1px solid #e5e7eb}.btn-outline:hover:not(:disabled){background:#f9fafb}
-.btn-sm{padding:.375rem .875rem;font-size:.875rem}
-.error-msg{color:#ef4444;background:#fef2f2;padding:.625rem .875rem;border-radius:.5rem;font-size:.875rem;margin-top:.5rem}
-.link{color:#2563eb;cursor:pointer;font-weight:500}.link:hover{text-decoration:underline}
-.main{max-width:56rem;margin:0 auto;padding:2rem 1.5rem}
-.main-sm{max-width:36rem;margin:0 auto;padding:2rem 1.5rem}
-.card{background:#fff;border-radius:.75rem;border:1px solid #e5e7eb;padding:1.125rem;margin-bottom:.75rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-.card:hover{border-color:#93c5fd;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.9375rem;font-weight:600;padding:.3rem .85rem;border-radius:9999px}
-.badge-gray{background:#f3f4f6;color:#4b5563}
-.badge-blue{background:#dbeafe;color:#1d4ed8}
-.badge-green{background:#dcfce7;color:#15803d}
-.badge-red{background:#fee2e2;color:#dc2626}
-.spinner{display:inline-block;width:.75rem;height:.75rem;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
-.spinner-lg{width:2.5rem;height:2.5rem;border-width:3px;border-color:#3b82f6;border-top-color:transparent}
-@keyframes spin{to{transform:rotate(360deg)}}
-.upload-section{background:#fff;border-radius:.75rem;border:1px solid #e5e7eb;padding:1.25rem;margin-bottom:1rem}
-.drop-zone{border:2px dashed #d1d5db;border-radius:.5rem;padding:1.5rem;text-align:center;cursor:pointer;transition:all .15s;user-select:none}
-.drop-zone:hover,.drop-zone.drag{border-color:#60a5fa;background:#eff6ff}
-.file-item{display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border-radius:.5rem;padding:.5rem .75rem;margin-top:.5rem}
-.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem}
-.summary-card{background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem}
-.result-file{border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden;background:#fff;margin-bottom:.75rem}
-.result-file-hdr{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;cursor:pointer}
-.result-file-hdr:hover{background:#f9fafb}
-.result-sec-hdr{padding:.4rem 1.25rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid transparent}
-.result-sec-hdr.sup{background:#fffbeb;border-color:#fef3c7}
-.result-sec-hdr.typ{background:#f5f3ff;border-color:#ede9fe}
-.result-sec-hdr.bld{background:#fef2f2;border-color:#fee2e2}
-.result-item{padding:.75rem 1.25rem;display:flex;align-items:flex-start;gap:.75rem}
-.result-item.sup{background:rgba(251,191,36,.06)}
-.result-item.typ{background:rgba(109,40,217,.04)}
-.result-item.bld{background:rgba(239,68,68,.06)}
-.dot{width:.5rem;height:.5rem;border-radius:50%;flex-shrink:0;margin-top:.375rem}
-.pg-badge{font-size:.8125rem;font-weight:600;white-space:nowrap;flex-shrink:0;margin-top:.125rem}
-.chevron{transition:transform .2s}
-.chevron.open{transform:rotate(180deg)}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
-.modal{background:#fff;border-radius:.875rem;padding:1.5rem;max-width:20rem;width:calc(100% - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.25)}
-#toast-container{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem}
-.toast{background:#1f2937;color:#fff;padding:.625rem 1rem;border-radius:.5rem;font-size:.875rem;max-width:20rem;animation:slideIn .2s ease}
-.toast.success{background:#065f46}.toast.error{background:#991b1b}
-@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
-.flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
-.gap-2{gap:.5rem}.gap-3{gap:.75rem}
-.text-sm{font-size:.875rem}.text-xs{font-size:.75rem}.text-gray{color:#6b7280}
-.text-center{text-align:center}.bold{font-weight:600}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mb-4{margin-bottom:1rem}
-/* 로딩 단계 메시지 */
-.loading-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:1.25rem;padding:7rem 1rem;text-align:center}
-.loading-stage-msg{font-size:1rem;font-weight:500;color:#374151;transition:opacity .3s;min-height:1.5rem}
-.loading-stage-sub{font-size:.875rem;color:#9ca3af;margin-top:.25rem}
-.loading-steps{display:flex;gap:.375rem;margin-top:.25rem}
-.loading-step-dot{width:.5rem;height:.5rem;border-radius:50%;background:#e5e7eb;transition:background .4s}
-.loading-step-dot.active{background:#3b82f6}
-/* 빈 상태 */
-.empty-state{display:flex;flex-direction:column;align-items:center;padding:5rem 1.5rem;text-align:center}
-.empty-state-icon{width:3.5rem;height:3.5rem;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem}
-.empty-state-title{font-size:1.0625rem;font-weight:600;color:#374151;margin-bottom:.5rem}
-.empty-state-desc{font-size:.875rem;color:#9ca3af;margin-bottom:1.5rem;max-width:22rem;line-height:1.6}
-/* 오류 상태 (결과 실패) */
-.error-state{max-width:28rem;margin:5rem auto;padding:2rem 1.5rem;text-align:center;background:#fff;border:1px solid #fee2e2;border-radius:.875rem}
-.error-state-icon{width:2.75rem;height:2.75rem;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto .875rem}
-.error-state-title{font-weight:700;font-size:1.0625rem;color:#dc2626;margin-bottom:.5rem}
-.error-state-msg{font-size:.875rem;color:#6b7280;margin-bottom:1.5rem;line-height:1.6}
-.error-state-actions{display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap}
-/* 요약 카드 상태 */
-.summary-card.is-zero{border-color:#d1fae5;background:#f0fdf4}
-.summary-card.is-zero .issue-count{color:#16a34a!important}
-.summary-card.has-issues{border-color:#fde68a}
-/* 검출 없음 (이슈 없는 파일) */
-.result-clean{display:flex;align-items:center;gap:.5rem;padding:1rem 1.25rem;color:#15803d;font-size:.875rem;background:#f0fdf4}
-/* 업로드 진행 피드백 */
-.upload-in-progress{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#eff6ff;border-radius:.5rem;font-size:.875rem;color:#1d4ed8;margin-top:.375rem}
-/* 비밀번호 표시/숨기기 토글 */
+label{display:block;font-size:.875rem;font-weight:600;color:#374151;margin-bottom:.5rem}
+input[type=text],input[type=password]{width:100%;height:var(--ctrl-h);border:1px solid #d1d5db;border-radius:var(--r-input);padding:0 1rem;font-family:var(--font-sans);font-size:.9375rem;outline:none;transition:box-shadow .15s,border-color .15s;background:#fff}
+input:focus{box-shadow:0 0 0 3px var(--pink-bg);border-color:var(--pink)}
+.input-icon{position:relative}
+.input-icon>.icon{position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1rem;color:#9ca3af;pointer-events:none;z-index:1}
+.input-icon>input[type=text],.input-icon>.pw-wrap input{padding-left:2.75rem}
 .pw-wrap{position:relative}
 .pw-wrap input{padding-right:2.75rem}
 .pw-toggle{position:absolute;right:.375rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.05rem;color:#9ca3af;padding:.375rem .5rem;line-height:1;border-radius:.375rem}
 .pw-toggle:hover{color:#4b5563;background:#f3f4f6}
-/* 모바일 대응 */
+.auth-row{display:flex;align-items:center;justify-content:space-between;margin:-.5rem 0 1.25rem}
+.chk-row{display:flex;align-items:center;gap:.5rem;font-size:.8125rem;color:#4b5563;font-weight:500;cursor:pointer}
+.chk-row input{width:1rem;height:1rem;accent-color:var(--pink);cursor:pointer}
+
+/* ── 버튼/배지/카드 공통 ─────────────────────────────── */
+.btn{border:none;cursor:pointer;font-family:var(--font-sans);font-size:.9375rem;font-weight:600;border-radius:var(--r-input);padding:0 1.125rem;height:var(--ctrl-h);transition:background .15s,opacity .15s,transform .15s,box-shadow .15s;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-full{width:100%}
+.btn-primary{background:var(--pink);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--pink-hover);transform:translateY(-1px);box-shadow:0 8px 20px rgba(235,0,139,.28)}
+.btn-primary:active:not(:disabled){transform:translateY(0)}
+.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover:not(:disabled){background:#dc2626}
+.btn-slate{background:#475569;color:#fff}.btn-slate:hover:not(:disabled){background:#334155}
+.btn-outline{background:#fff;color:#374151;border:1px solid #e5e7eb}.btn-outline:hover:not(:disabled){background:#f9fafb;border-color:#d1d5db}
+.btn-sm{padding:0 .875rem;height:2.25rem;font-size:.8125rem}
+.error-msg{color:#dc2626;background:#fef2f2;padding:.625rem .875rem;border-radius:var(--r-input);font-size:.8125rem;margin-top:.5rem}
+.link{color:var(--pink-dark);cursor:pointer;font-weight:600}.link:hover{color:var(--pink-hover);text-decoration:underline}
+.main{max-width:72rem;margin:0 auto;padding:2rem 1.5rem}
+.main-sm{max-width:40rem;margin:0 auto;padding:2rem 1.5rem}
+.card{background:#fff;border-radius:var(--r-card);border:1px solid #e5e7eb;padding:1.125rem;margin-bottom:.75rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:#f3b8dc;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.8125rem;font-weight:700;padding:.3rem .85rem;border-radius:9999px}
+.badge-gray{background:#f3f4f6;color:#4b5563}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-red{background:#fee2e2;color:#dc2626}
+.tag{display:inline-flex;align-items:center;font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px}
+.tag-sup{background:var(--sup-bg);color:var(--sup-text)}
+.tag-typ{background:var(--typ-bg);color:var(--typ-text)}
+.tag-cmp{background:var(--cmp-bg);color:var(--cmp-text)}
+.tag-bld{background:var(--bld-bg);color:var(--bld-text)}
+.spinner{display:inline-block;width:.75rem;height:.75rem;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
+.spinner-lg{width:2.5rem;height:2.5rem;border-width:3px;border-color:var(--pink);border-top-color:transparent}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 업로드(검토 요청) 화면 ───────────────────────────── */
+.step-label{display:flex;align-items:center;gap:.5rem;margin:2rem 0 1rem}
+.step-label:first-of-type{margin-top:1.5rem}
+.step-num{font-family:var(--font-mono);font-size:.75rem;font-weight:700;color:var(--pink-dark);background:var(--pink-bg);width:1.5rem;height:1.5rem;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.step-title{font-size:1rem;font-weight:700;color:#111827}
+.step-extra{margin-left:auto;font-size:.8125rem;color:#6b7280}
+.upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.upload-section{background:#fff;border-radius:var(--r-card);border:1px solid #e5e7eb;padding:1.25rem}
+.up-sec-hdr{display:flex;align-items:center;gap:.5rem;margin-bottom:.875rem}
+.up-sec-badge{font-size:.6875rem;font-weight:600;color:#6b7280;background:#f3f4f6;padding:.125rem .5rem;border-radius:9999px}
+.up-sec-count{margin-left:auto;font-family:var(--font-mono);font-size:.8125rem;font-weight:700;color:var(--pink-dark)}
+.drop-zone{border:2px dashed #e5c3dc;border-radius:var(--r-input);padding:1.75rem 1rem;text-align:center;cursor:pointer;transition:all .15s;user-select:none;background:var(--pink-bg-soft)}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--pink);background:var(--pink-bg)}
+.drop-zone .dz-icon{width:2rem;height:2rem;border-radius:9999px;background:var(--pink-bg);color:var(--pink-dark);display:flex;align-items:center;justify-content:center;margin:0 auto .625rem;font-size:1rem}
+.add-more-row{display:flex;align-items:center;justify-content:center;gap:.375rem;border:1px dashed #d1d5db;border-radius:var(--r-input);padding:.625rem;cursor:pointer;font-size:.8125rem;font-weight:600;color:var(--pink-dark);transition:background .15s,border-color .15s}
+.add-more-row:hover{background:var(--pink-bg-soft);border-color:var(--pink)}
+.file-item{display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border-radius:var(--r-input);padding:.625rem .875rem;margin-bottom:.5rem}
+.det-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.det-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:var(--r-card);padding:1.125rem;transition:border-color .15s,background .15s}
+.det-card.selected{border-color:var(--pink);background:var(--pink-bg-soft)}
+.det-card-top{display:flex;align-items:center;gap:.75rem;cursor:pointer}
+.det-icon{width:2.25rem;height:2.25rem;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9375rem;flex-shrink:0}
+.det-card-text{flex:1;min-width:0}
+.det-title{font-size:.9375rem;font-weight:700;color:#111827}
+.det-desc{font-size:.8125rem;color:#6b7280;margin-top:.25rem;line-height:1.5}
+.det-card input[type=checkbox]{width:1.25rem;height:1.25rem;accent-color:var(--pink);cursor:pointer;flex-shrink:0}
+.det-sub{margin-top:1rem;padding-top:1rem;border-top:1px solid #f3f4f6}
+.summary-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;background:#fff;border:1px solid #e5e7eb;border-radius:var(--r-card);padding:1.125rem 1.25rem;margin-top:1.5rem;flex-wrap:wrap}
+input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5db;border-radius:8px;font-family:var(--font-sans);font-size:.8125rem;padding:0 .625rem}
+
+/* ── 검토 이력(대시보드) 화면 ──────────────────────────── */
+.hist-toolbar{display:flex;gap:.625rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.hist-toolbar input[type=text]{flex:1;min-width:12rem;height:2.75rem}
+.hist-toolbar select{height:2.75rem;border:1px solid #d1d5db;border-radius:var(--r-input);padding:0 .75rem;font-family:var(--font-sans);font-size:.875rem;background:#fff;color:#374151}
+.hist-actions{display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem}
+.hist-table{background:#fff;border:1px solid #e5e7eb;border-radius:var(--r-card);overflow:hidden}
+.hist-row{display:grid;grid-template-columns:2.25rem 9rem 1fr 1.4fr 7rem;align-items:center;gap:.75rem;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6}
+.hist-row:last-child{border-bottom:none}
+.hist-row-head{background:#f9fafb;font-size:.75rem;font-weight:700;color:#6b7280}
+.hist-row-body{cursor:pointer;transition:background .15s}
+.hist-row-body:hover{background:#fdf2f8}
+.hist-date{font-family:var(--font-mono);font-size:.8125rem;color:#374151;line-height:1.4}
+.hist-target-type{font-size:.875rem;font-weight:700;color:#111827}
+.hist-target-sub{font-size:.75rem;color:#9ca3af;margin-top:.125rem}
+.hist-tags{display:flex;gap:.375rem;flex-wrap:wrap}
+.hist-pagination{display:flex;align-items:center;justify-content:space-between;margin-top:1rem;font-size:.8125rem;color:#6b7280}
+.page-btns{display:flex;gap:.25rem}
+.page-btn{width:2rem;height:2rem;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-family:var(--font-mono);font-size:.8125rem;color:#374151}
+.page-btn.active{background:var(--pink);border-color:var(--pink);color:#fff}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}
+.empty-state{display:flex;flex-direction:column;align-items:center;padding:5rem 1.5rem;text-align:center}
+.empty-state-icon{width:3.5rem;height:3.5rem;border-radius:50%;background:var(--pink-bg);display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem}
+.empty-state-title{font-size:1.0625rem;font-weight:700;color:#111827;margin-bottom:.5rem}
+.empty-state-desc{font-size:.875rem;color:#9ca3af;margin-bottom:1.5rem;max-width:22rem;line-height:1.6}
+
+/* ── 결과 화면 ───────────────────────────────────────── */
+.res-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.res-breadcrumb{font-size:.8125rem;color:#9ca3af;margin-bottom:.375rem}
+.res-breadcrumb .link{font-weight:600}
+.res-title{font-size:1.5rem;font-weight:700;color:#111827}
+.res-sub{font-size:.875rem;color:#6b7280;margin-top:.25rem}
+.res-layout{display:grid;grid-template-columns:16rem 1fr;gap:1.5rem;align-items:start}
+.summary-grid{display:grid;gap:.875rem;margin-bottom:0}
+.summary-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:var(--r-card);padding:1.125rem;cursor:pointer;transition:border-color .15s,box-shadow .15s;text-align:left}
+.summary-card.active{border-color:var(--pink);box-shadow:0 0 0 3px var(--pink-bg)}
+.summary-card .sc-label{font-size:.8125rem;font-weight:700;color:#111827}
+.summary-card .sc-sub{font-size:.75rem;margin:.125rem 0 .5rem}
+.summary-card .sc-count{font-family:var(--font-mono);font-size:1.625rem;font-weight:700}
+.res-sidebar{position:sticky;top:5.5rem;display:flex;flex-direction:column;gap:1rem}
+.sidebar-box{background:#fff;border:1px solid #e5e7eb;border-radius:var(--r-card);padding:1.125rem}
+.sidebar-box-title{font-size:.8125rem;font-weight:700;color:#374151;margin-bottom:.75rem}
+.progress-track{width:100%;height:.5rem;border-radius:9999px;background:#f3f4f6;overflow:hidden;margin-top:.625rem}
+.progress-fill{height:100%;background:var(--pink);border-radius:9999px;transition:width .2s}
+.progress-note{font-size:.75rem;color:#9ca3af;margin-top:.5rem;line-height:1.5}
+.sidebar-file{display:flex;align-items:center;gap:.625rem;padding:.625rem;border-radius:var(--r-input);background:var(--pink-bg-soft);cursor:pointer}
+.sidebar-file-icon{width:2rem;height:2rem;border-radius:7px;background:var(--pink-bg);color:var(--pink-dark);font-size:.6875rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.result-file{border:1px solid #e5e7eb;border-radius:var(--r-card);overflow:hidden;background:#fff;margin-bottom:.875rem}
+.result-file-hdr{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;cursor:pointer}
+.result-file-hdr:hover{background:#f9fafb}
+.result-sec-hdr{padding:.5rem 1.25rem;display:flex;align-items:center;gap:.5rem}
+.result-sec-hdr.sup{background:var(--sup-bg)}
+.result-sec-hdr.typ{background:var(--typ-bg)}
+.result-sec-hdr.cmp{background:var(--cmp-bg)}
+.result-sec-hdr.bld{background:var(--bld-bg)}
+.result-item{padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.875rem}
+.result-item.sup{background:rgba(217,119,6,.04)}
+.result-item.typ{background:rgba(124,58,237,.04)}
+.result-item.cmp{background:rgba(13,148,136,.04)}
+.result-item.bld{background:rgba(37,99,235,.04)}
+.dot{width:.5rem;height:.5rem;border-radius:50%;flex-shrink:0}
+.pg-badge{font-family:var(--font-mono);font-size:.8125rem;font-weight:700;white-space:nowrap;flex-shrink:0;margin-top:.125rem}
+.chevron{transition:transform .2s}
+.chevron.open{transform:rotate(180deg)}
+.suggestion-box{background:#ECFDF5;color:#047857;border-radius:8px;padding:.5rem .75rem;font-size:.8125rem;margin-top:.5rem;display:flex;gap:.5rem}
+.suggestion-box .sb-label{font-weight:700;flex-shrink:0}
+.advice-note{font-size:.75rem;color:#9ca3af;margin-top:.375rem;line-height:1.5}
+.confirm-btn{border:1px solid #e5e7eb;background:#fff;color:#6b7280;font-size:.75rem;font-weight:700;padding:.3rem .7rem;border-radius:999px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:.25rem;transition:background .15s,border-color .15s,color .15s}
+.confirm-btn:hover{border-color:#d1d5db}
+.confirm-btn.on{background:#ECFDF5;border-color:#a7f3d0;color:#047857}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:var(--r-card);padding:1.5rem;max-width:20rem;width:calc(100% - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#toast-container{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem}
+.toast{background:#1f2937;color:#fff;padding:.625rem 1rem;border-radius:var(--r-input);font-size:.875rem;max-width:20rem;animation:slideIn .2s ease}
+.toast.success{background:#065f46}.toast.error{background:#991b1b}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+.flex{display:flex}.items-center{align-items:center}.items-start{align-items:flex-start}.justify-between{justify-content:space-between}
+.gap-2{gap:.5rem}.gap-3{gap:.75rem}
+.text-sm{font-size:.875rem}.text-xs{font-size:.75rem}.text-gray{color:#6b7280}
+.text-center{text-align:center}.bold{font-weight:700}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mb-4{margin-bottom:1rem}
+.loading-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:1.25rem;padding:7rem 1rem;text-align:center}
+.loading-stage-msg{font-size:1rem;font-weight:600;color:#374151;transition:opacity .3s;min-height:1.5rem}
+.loading-stage-sub{font-size:.875rem;color:#9ca3af;margin-top:.25rem}
+.loading-steps{display:flex;gap:.375rem;margin-top:.25rem}
+.loading-step-dot{width:.5rem;height:.5rem;border-radius:50%;background:#e5e7eb;transition:background .4s}
+.loading-step-dot.active{background:var(--pink)}
+.error-state{max-width:28rem;margin:5rem auto;padding:2rem 1.5rem;text-align:center;background:#fff;border:1px solid #fee2e2;border-radius:var(--r-card)}
+.error-state-icon{width:2.75rem;height:2.75rem;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto .875rem}
+.error-state-title{font-weight:700;font-size:1.0625rem;color:#dc2626;margin-bottom:.5rem}
+.error-state-msg{font-size:.875rem;color:#6b7280;margin-bottom:1.5rem;line-height:1.6}
+.error-state-actions{display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap}
+.result-clean{display:flex;align-items:center;gap:.5rem;padding:1rem 1.25rem;color:#047857;font-size:.875rem;background:#ECFDF5}
+.upload-in-progress{display:flex;align-items:center;gap:.5rem;padding:.625rem .875rem;background:var(--pink-bg-soft);border-radius:var(--r-input);font-size:.8125rem;color:var(--pink-dark);margin-top:.5rem}
+@media (max-width:900px){
+  .res-layout{grid-template-columns:1fr}
+  .res-sidebar{position:static}
+}
+@media (max-width:768px){
+  .upload-grid{grid-template-columns:1fr}
+  .det-grid{grid-template-columns:1fr}
+  .auth-shell{grid-template-columns:1fr}
+  .auth-brand-panel{display:none}
+}
 @media (max-width:640px){
-  nav{padding:1rem}
-  nav>*:first-child{display:none}
-  nav [style*="position:absolute"]{position:static!important;left:auto!important;transform:none!important}
-  .auth-box{padding:1.75rem 1.25rem}
-  .auth-title{font-size:1.5rem;text-align:center;padding:0 1rem}
+  .app-nav{padding:.75rem 1rem}
+  .nav-tabs{order:3;width:100%}
+  .logo-text{display:none}
   .main,.main-sm{padding:1.25rem 1rem}
-  .summary-grid{grid-template-columns:repeat(2,1fr)!important;gap:.625rem}
-  .result-file-hdr{flex-wrap:wrap;gap:.5rem}
+  .hist-row{grid-template-columns:1.5rem 1fr;row-gap:.375rem}
+  .hist-row>*:nth-child(3),.hist-row>*:nth-child(4){grid-column:2}
+  .hist-row-head{display:none}
+  .hist-row>*:nth-child(5){grid-column:2}
   .error-state{margin:2.5rem auto}
 }
 </style>
@@ -128,175 +257,264 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
 
 <!-- ── 로그인 ──────────────────────────────────────────── -->
 <div id="page-login" class="page active">
-  <div class="auth-wrap">
-    <h1 class="auth-title">제안서 검증 AI</h1>
-    <div class="auth-box">
-      <p style="font-size:1.125rem;font-weight:700;color:#2563eb;margin-bottom:2rem">로그인하여 시작하세요</p>
-      <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="l-user" autocomplete="username"></div></div>
-      <div class="form-group"><label>비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="l-pass" autocomplete="current-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('l-pass',this)">👁</button></div></div></div>
-      <div id="l-err" class="error-msg" style="display:none"></div>
-      <button class="btn btn-primary btn-full mt-4" id="l-btn" onclick="doLogin()">로그인</button>
-      <div id="l-server-wrap" style="display:none;margin-top:1rem;padding:1rem;background:#f8fafc;border-radius:.5rem;border:1px solid #e2e8f0">
-        <label style="font-size:.8125rem;font-weight:500;color:#64748b;margin-bottom:.375rem;display:block">백엔드 서버 주소</label>
-        <input type="text" id="l-api" placeholder="https://your-server.com" autocomplete="off" style="font-size:.875rem;padding:.5rem .75rem">
-        <p class="text-xs mt-1" id="l-api-hint" style="color:#64748b"></p>
+  <div class="auth-shell">
+    <div class="auth-brand-panel">
+      <div class="auth-brand-top">
+        <div class="nav-brand">
+          <span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="logo-text">제안서 검증 AI</span>
+        </div>
+        <p class="auth-eyebrow">PROPOSAL REVIEW</p>
+        <h1 class="auth-headline">제출 전, 평가 리스크를<br><span class="hl">한 번 더 걸러냅니다.</span></h1>
+        <p class="auth-desc">정성·정량제안서와 발표본을 올리면 허위·과장 표현, 오타, 경쟁사 비방, 블라인드 평가 위반 요소를 페이지 단위로 찾아 수정안까지 제시합니다.</p>
+        <div class="auth-feature-grid">
+          <div class="auth-feature"><span class="dot" style="background:var(--sup-accent)"></span><div><p class="auth-feature-title">최상급 표현</p><p class="auth-feature-desc">최초·최고·유일 등 과장 문구</p></div></div>
+          <div class="auth-feature"><span class="dot" style="background:var(--typ-accent)"></span><div><p class="auth-feature-title">오타</p><p class="auth-feature-desc">한글·영문 맞춤법과 철자</p></div></div>
+          <div class="auth-feature"><span class="dot" style="background:var(--cmp-accent)"></span><div><p class="auth-feature-title">경쟁사 비교·비방</p><p class="auth-feature-desc">직접 비교, 우위 주장 문구</p></div></div>
+          <div class="auth-feature"><span class="dot" style="background:var(--bld-accent)"></span><div><p class="auth-feature-title">블라인드 평가</p><p class="auth-feature-desc">회사명·로고 등 식별정보</p></div></div>
+        </div>
       </div>
-      <p class="text-center text-sm text-gray mt-4">계정이 없으신가요? <span class="link" onclick="show('register')">회원가입</span> · <span class="link" onclick="show('change-password')">비밀번호 변경</span></p>
+      <p class="auth-footer">© [회사명] · 내부 업무용 시스템</p>
+    </div>
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <h2 class="auth-form-title">로그인</h2>
+        <p class="auth-form-sub">발급받은 계정으로 로그인하세요.</p>
+        <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="l-user" placeholder="아이디 입력" autocomplete="username"></div></div>
+        <div class="form-group"><label>비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="l-pass" placeholder="비밀번호 입력" autocomplete="current-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('l-pass',this)">👁</button></div></div></div>
+        <div class="auth-row">
+          <label class="chk-row"><input type="checkbox" id="l-remember">아이디 저장</label>
+          <span class="link text-sm" onclick="show('change-password')">비밀번호 변경</span>
+        </div>
+        <div id="l-err" class="error-msg" style="display:none"></div>
+        <button class="btn btn-primary btn-full mt-4" id="l-btn" onclick="doLogin()">로그인</button>
+        <div id="l-server-wrap" style="display:none;margin-top:1rem;padding:1rem;background:#f8fafc;border-radius:var(--r-input);border:1px solid #e2e8f0">
+          <label style="font-size:.8125rem;font-weight:600;color:#64748b;margin-bottom:.375rem;display:block">백엔드 서버 주소</label>
+          <input type="text" id="l-api" placeholder="https://your-server.com" autocomplete="off" style="font-size:.875rem;height:2.5rem">
+          <p class="text-xs mt-1" id="l-api-hint" style="color:#64748b"></p>
+        </div>
+        <p class="text-center text-sm text-gray mt-4">계정이 없으신가요? <span class="link" onclick="show('register')">회원가입</span></p>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ── 비밀번호 변경 ──────────────────────────────────────── -->
 <div id="page-change-password" class="page">
-  <div class="auth-wrap">
-    <h1 class="auth-title">제안서 검증 AI</h1>
-    <div class="auth-box">
-      <p style="font-size:1.5rem;font-weight:700;margin-bottom:2rem">비밀번호 변경</p>
-      <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="cp-user" autocomplete="username"></div></div>
-      <div class="form-group"><label>현재 비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-cur" autocomplete="current-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-cur',this)">👁</button></div></div></div>
-      <div class="form-group">
-        <label>새 비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-new" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-new',this)">👁</button></div></div>
-        <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+  <div class="auth-shell">
+    <div class="auth-brand-panel">
+      <div class="auth-brand-top">
+        <div class="nav-brand">
+          <span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="logo-text">제안서 검증 AI</span>
+        </div>
+        <p class="auth-eyebrow">PROPOSAL REVIEW</p>
+        <h1 class="auth-headline">제출 전, 평가 리스크를<br><span class="hl">한 번 더 걸러냅니다.</span></h1>
       </div>
-      <div class="form-group"><label>새 비밀번호 확인</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-conf" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-conf',this)">👁</button></div></div></div>
-      <div id="cp-err" class="error-msg" style="display:none"></div>
-      <button class="btn btn-primary btn-full mt-4" id="cp-btn" onclick="doChangePassword()">비밀번호 변경</button>
-      <p class="text-center text-sm text-gray mt-4"><span class="link" onclick="show('login')">로그인으로 돌아가기</span></p>
+      <p class="auth-footer">© [회사명] · 내부 업무용 시스템</p>
+    </div>
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <h2 class="auth-form-title">비밀번호 변경</h2>
+        <p class="auth-form-sub">아이디와 현재 비밀번호를 확인 후 변경합니다.</p>
+        <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="cp-user" autocomplete="username"></div></div>
+        <div class="form-group"><label>현재 비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-cur" autocomplete="current-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-cur',this)">👁</button></div></div></div>
+        <div class="form-group">
+          <label>새 비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-new" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-new',this)">👁</button></div></div>
+          <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+        </div>
+        <div class="form-group"><label>새 비밀번호 확인</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="cp-conf" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('cp-conf',this)">👁</button></div></div></div>
+        <div id="cp-err" class="error-msg" style="display:none"></div>
+        <button class="btn btn-primary btn-full mt-4" id="cp-btn" onclick="doChangePassword()">비밀번호 변경</button>
+        <p class="text-center text-sm text-gray mt-4"><span class="link" onclick="show('login')">로그인으로 돌아가기</span></p>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ── 회원가입 ─────────────────────────────────────────── -->
 <div id="page-register" class="page">
-  <div class="auth-wrap">
-    <h1 class="auth-title">제안서 검증 AI</h1>
-    <div class="auth-box">
-      <p style="font-size:1.5rem;font-weight:700;margin-bottom:2rem">회원가입</p>
-      <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="r-user" autocomplete="username"></div></div>
-      <div class="form-group">
-        <label>비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="r-pass" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('r-pass',this)">👁</button></div></div>
-        <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+  <div class="auth-shell">
+    <div class="auth-brand-panel">
+      <div class="auth-brand-top">
+        <div class="nav-brand">
+          <span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="logo-text">제안서 검증 AI</span>
+        </div>
+        <p class="auth-eyebrow">PROPOSAL REVIEW</p>
+        <h1 class="auth-headline">제출 전, 평가 리스크를<br><span class="hl">한 번 더 걸러냅니다.</span></h1>
       </div>
-      <div class="form-group"><label>비밀번호 확인</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="r-conf" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('r-conf',this)">👁</button></div></div></div>
-      <div id="r-err" class="error-msg" style="display:none"></div>
-      <button class="btn btn-primary btn-full mt-4" id="r-btn" onclick="doRegister()">회원가입</button>
-      <p class="text-center text-sm text-gray mt-4">이미 계정이 있으신가요? <span class="link" onclick="show('login')">로그인</span></p>
+      <p class="auth-footer">© [회사명] · 내부 업무용 시스템</p>
+    </div>
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <h2 class="auth-form-title">회원가입</h2>
+        <p class="auth-form-sub">내부 업무용 계정을 생성합니다.</p>
+        <div class="form-group"><label>아이디</label><div class="input-icon"><span class="icon">👤</span><input type="text" id="r-user" autocomplete="username"></div></div>
+        <div class="form-group">
+          <label>비밀번호</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="r-pass" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('r-pass',this)">👁</button></div></div>
+          <p class="text-xs text-gray mt-1">영문+숫자 포함 6자 이상</p>
+        </div>
+        <div class="form-group"><label>비밀번호 확인</label><div class="input-icon"><span class="icon">🔒</span><div class="pw-wrap"><input type="password" id="r-conf" autocomplete="new-password"><button type="button" class="pw-toggle" aria-label="비밀번호 표시" onclick="togglePw('r-conf',this)">👁</button></div></div></div>
+        <div id="r-err" class="error-msg" style="display:none"></div>
+        <button class="btn btn-primary btn-full mt-4" id="r-btn" onclick="doRegister()">회원가입</button>
+        <p class="text-center text-sm text-gray mt-4">이미 계정이 있으신가요? <span class="link" onclick="show('login')">로그인</span></p>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ── 대시보드 ─────────────────────────────────────────── -->
+<!-- ── 대시보드(검토 이력) ──────────────────────────────── -->
 <div id="page-dashboard" class="page">
-  <nav>
-    <span style="font-size:1.25rem;font-weight:700;color:#7c3aed">제안서 검증 AI</span>
-    <div style="position:absolute;left:50%;transform:translateX(-50%);font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 검토 이력</div>
-    <div class="flex items-center gap-3">
-      <span id="d-username" class="bold" style="color:#065f46"></span>
+  <nav class="app-nav">
+    <div class="nav-left">
+      <div class="nav-brand"><span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-text">제안서 검증 AI</span></div>
+      <div class="nav-tabs"><button class="nav-tab" onclick="createJob()">검토 요청</button><button class="nav-tab active" onclick="show('dashboard')">검토 이력</button></div>
+    </div>
+    <div class="nav-right">
+      <span id="d-username" class="user-block"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
   </nav>
   <div class="main">
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-3">
-        <input type="checkbox" id="chk-all" onchange="toggleAll()" style="width:1rem;height:1rem;accent-color:#7c3aed">
-        <span class="text-sm text-gray">전체 선택</span>
-        <button class="btn btn-slate btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
+    <div class="flex items-start justify-between mb-4" style="flex-wrap:wrap;gap:1rem">
+      <div>
+        <h1 style="font-size:1.5rem;font-weight:700;color:#111827">검토 이력</h1>
+        <p class="text-sm text-gray mt-1">지금까지 요청한 제안서 검토 결과를 확인합니다.</p>
       </div>
-      <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 제안서 검토 요청</button>
+      <button class="btn btn-primary btn-sm" id="new-btn" onclick="createJob()">+ 새 검토 요청</button>
+    </div>
+    <div class="hist-toolbar">
+      <input type="text" id="dash-search" placeholder="파일명으로 검색" oninput="applyDashboardFilters()">
+      <select id="dash-date-filter" onchange="applyDashboardFilters()">
+        <option value="all">전체 기간</option><option value="today">오늘</option><option value="7d">최근 7일</option><option value="30d">최근 30일</option>
+      </select>
+      <select id="dash-type-filter" onchange="applyDashboardFilters()">
+        <option value="all">모든 문서 유형</option><option value="qualitative">정성제안서</option><option value="quantitative">정량제안서</option><option value="presentation">발표본</option>
+      </select>
+    </div>
+    <div class="hist-actions">
+      <label class="chk-row"><input type="checkbox" id="chk-all" onchange="toggleAll()">전체 선택</label>
+      <button class="btn btn-slate btn-sm" id="del-btn" style="display:none" onclick="deleteSelected()">선택 삭제</button>
     </div>
     <div id="d-loading" class="text-center" style="padding:5rem 0"><div class="spinner spinner-lg" style="display:inline-block"></div><p class="text-sm text-gray" style="margin-top:.75rem">이력을 불러오는 중...</p></div>
     <div id="d-empty" style="display:none">
       <div class="empty-state">
-        <div class="empty-state-icon"><svg width="24" height="24" fill="none" stroke="#9ca3af" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z"/></svg></div>
+        <div class="empty-state-icon"><svg width="24" height="24" fill="none" stroke="var(--pink-dark)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z"/></svg></div>
         <p class="empty-state-title">아직 검토 이력이 없습니다</p>
         <p class="empty-state-desc">제안서 파일을 업로드 하면 최상급 표현, 오타, 경쟁사 비교/비방 표현, 블라인드 평가 회사식별정보를 자동으로 검출합니다.</p>
         <button class="btn btn-primary" onclick="createJob()">첫 검토 시작하기</button>
       </div>
     </div>
-    <div id="d-list"></div>
+    <div id="d-table-wrap" style="display:none">
+      <div class="hist-table">
+        <div class="hist-row hist-row-head">
+          <span></span><span>검토 일시</span><span>검토 대상</span><span>검출 결과</span><span></span>
+        </div>
+        <div id="d-list"></div>
+      </div>
+      <div class="hist-pagination" id="dash-pagination"></div>
+    </div>
   </div>
 </div>
 
-<!-- ── 업로드 ──────────────────────────────────────────── -->
+<!-- ── 업로드(검토 요청) ──────────────────────────────────── -->
 <div id="page-upload" class="page">
-  <nav>
-    <span style="font-size:1.25rem;font-weight:700;color:#7c3aed">제안서 검증 AI</span>
-    <span style="position:absolute;left:50%;transform:translateX(-50%);font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 검토 요청</span>
-    <div class="flex items-center gap-3">
-      <button class="badge badge-green" style="cursor:pointer;border:none" onclick="show('dashboard')">검토이력 보기</button>
-      <span id="u-username" class="bold" style="color:#065f46"></span>
+  <nav class="app-nav">
+    <div class="nav-left">
+      <div class="nav-brand"><span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-text">제안서 검증 AI</span></div>
+      <div class="nav-tabs"><button class="nav-tab active" onclick="createJob()">검토 요청</button><button class="nav-tab" onclick="show('dashboard')">검토 이력</button></div>
+    </div>
+    <div class="nav-right">
+      <span id="u-username" class="user-block"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
   </nav>
   <div class="main-sm">
-    <div id="sec-qualitative"></div>
-    <div id="sec-quantitative"></div>
-    <div id="sec-presentation"></div>
-    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
-      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
-        <input type="checkbox" id="superlative-eval-chk" checked style="width:1.1rem;height:1.1rem;accent-color:#f59e0b;cursor:pointer">
-        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">최상급 표현 검출 (허위, 과장 가능 문구)</span>
-      </label>
-      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">최초, 최대, 유일 등 허위사실로 오인될 수 있는 표현을 검출합니다.</p>
+    <h1 style="font-size:1.5rem;font-weight:700;color:#111827">제안서 검토 요청</h1>
+    <p class="text-sm text-gray mt-1">검토할 파일을 올리고 검출 항목을 선택하세요. 문서 분량에 따라 수 분이 걸릴 수 있습니다.</p>
+
+    <div class="step-label"><span class="step-num">01</span><span class="step-title">파일 업로드</span><span class="step-extra">.ppt .pptx .doc .docx .pdf · 파일당 최대 2GB</span></div>
+    <div class="upload-grid">
+      <div id="sec-qualitative"></div>
+      <div id="sec-quantitative"></div>
+      <div id="sec-presentation"></div>
     </div>
-    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
-      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
-        <input type="checkbox" id="typo-eval-chk" style="width:1.1rem;height:1.1rem;accent-color:#7c3aed;cursor:pointer">
-        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">오타 검출</span>
-      </label>
-      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">한글/영문 맞춤법 및 철자 오류를 검출합니다.</p>
-    </div>
-    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
-      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
-        <input type="checkbox" id="competitor-eval-chk" onchange="toggleCompetitorEval()" style="width:1.1rem;height:1.1rem;accent-color:#0ea5e9;cursor:pointer">
-        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">경쟁사 비교/비방 표현 검출</span>
-      </label>
-      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">경쟁사를 직접 비교하거나 비방하는 표현을 검출합니다.</p>
-      <div id="competitor-eval-section" style="display:none;margin-top:.875rem">
-        <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.625rem">경쟁사명 입력 <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택) ※ 입력 시 해당 회사 언급도 함께 검출</span></p>
-        <div id="competitor-keyword-list"></div>
-        <button class="btn btn-outline btn-sm" onclick="addCompetitorKeyword()" style="margin-top:.25rem;font-size:.8125rem">+ 경쟁사 추가</button>
+
+    <div class="step-label"><span class="step-num">02</span><span class="step-title">검출 항목</span><span class="text-sm text-gray" id="det-count" style="margin-left:.25rem">0개 선택됨</span><span class="step-extra"><span class="link" onclick="selectAllDetectionTypes()">전체 선택</span></span></div>
+    <div class="det-grid">
+      <div class="det-card">
+        <div class="det-card-top" onclick="toggleDetCard(event,'superlative-eval-chk')">
+          <span class="det-icon tag-sup">최</span>
+          <div class="det-card-text"><p class="det-title">최상급 표현 검출</p><p class="det-desc">최초·최대·유일 등 허위·과장으로 오인될 수 있는 표현을 찾습니다.</p></div>
+          <input type="checkbox" id="superlative-eval-chk" checked onchange="markCard('superlative-eval-chk');updateDetectionCount()">
+        </div>
       </div>
-    </div>
-    <div style="margin-top:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.25rem">
-      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer">
-        <input type="checkbox" id="blind-eval-chk" onchange="toggleBlindEval()" style="width:1.1rem;height:1.1rem;accent-color:#ef4444;cursor:pointer">
-        <span style="font-size:.9375rem;font-weight:600;color:#1f2937">블라인드 평가</span>
-      </label>
-      <p style="margin:.375rem 0 0 1.85rem;font-size:.8125rem;color:#6b7280">제안서에서 회사 식별 정보(텍스트, 이미지)를 검출합니다.</p>
-      <div id="blind-eval-section" style="display:none;margin-top:.875rem">
-        <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.625rem">① 텍스트 식별 (회사명, 대표자명 등)</p>
-        <div id="blind-keyword-list"></div>
-        <button class="btn btn-outline btn-sm" onclick="addBlindKeyword()" style="margin-top:.25rem;font-size:.8125rem">+ 항목 추가</button>
-        <div style="margin-top:1rem;border-top:1px solid #f3f4f6;padding-top:1rem">
-          <p style="font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.5rem">② 이미지 식별 (회사 로고 등) <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택)</span></p>
-          <label id="logo-upload-label" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem .875rem;border:1px dashed #d1d5db;border-radius:.5rem;font-size:.8125rem;color:#6b7280;background:#fafafa">
-            <span>🖼 이미지 파일 선택</span>
-            <input type="file" id="blind-logo-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none" onchange="onLogoSelected(this)">
-          </label>
-          <span style="font-size:.75rem;color:#9ca3af;margin-left:.5rem">지원 형식: PNG, JPEG, GIF, WebP</span>
-          <div id="logo-file-list"></div>
-          <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">※ 로고 이미지 검출은 AI를 사용합니다. 해상도가 낮거나 복잡한 배경이 있으면 검출이 누락될 수 있습니다.</p>
+      <div class="det-card">
+        <div class="det-card-top" onclick="toggleDetCard(event,'typo-eval-chk')">
+          <span class="det-icon tag-typ">오</span>
+          <div class="det-card-text"><p class="det-title">오타 검출</p><p class="det-desc">한글·영문 맞춤법과 철자 오류를 찾고 수정안을 제시합니다.</p></div>
+          <input type="checkbox" id="typo-eval-chk" onchange="markCard('typo-eval-chk');updateDetectionCount()">
+        </div>
+      </div>
+      <div class="det-card">
+        <div class="det-card-top" onclick="toggleDetCard(event,'competitor-eval-chk')">
+          <span class="det-icon tag-cmp">비</span>
+          <div class="det-card-text"><p class="det-title">경쟁사 비교·비방 표현</p><p class="det-desc">경쟁사를 직접 비교하거나 비방하는 문구를 찾습니다.</p></div>
+          <input type="checkbox" id="competitor-eval-chk" onchange="toggleCompetitorEval()">
+        </div>
+        <div id="competitor-eval-section" class="det-sub" style="display:none">
+          <p style="font-size:.8125rem;font-weight:600;color:#374151;margin-bottom:.625rem">경쟁사명 입력 <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택) ※ 입력 시 해당 회사 언급도 함께 검출</span></p>
+          <div id="competitor-keyword-list"></div>
+          <button class="btn btn-outline btn-sm" onclick="addCompetitorKeyword()" style="margin-top:.25rem;font-size:.8125rem;height:2rem">+ 경쟁사 추가</button>
+        </div>
+      </div>
+      <div class="det-card">
+        <div class="det-card-top" onclick="toggleDetCard(event,'blind-eval-chk')">
+          <span class="det-icon tag-bld">식</span>
+          <div class="det-card-text"><p class="det-title">블라인드 평가</p><p class="det-desc">회사명·로고·연락처 등 회사 식별정보를 텍스트와 이미지에서 찾습니다.</p></div>
+          <input type="checkbox" id="blind-eval-chk" onchange="toggleBlindEval()">
+        </div>
+        <div id="blind-eval-section" class="det-sub" style="display:none">
+          <p style="font-size:.8125rem;font-weight:600;color:#374151;margin-bottom:.625rem">① 텍스트 식별 (회사명, 대표자명 등)</p>
+          <div id="blind-keyword-list"></div>
+          <button class="btn btn-outline btn-sm" onclick="addBlindKeyword()" style="margin-top:.25rem;font-size:.8125rem;height:2rem">+ 항목 추가</button>
+          <div style="margin-top:1rem;border-top:1px solid #f3f4f6;padding-top:1rem">
+            <p style="font-size:.8125rem;font-weight:600;color:#374151;margin-bottom:.5rem">② 이미지 식별 (회사 로고 등) <span style="font-size:.75rem;font-weight:400;color:#9ca3af">(선택)</span></p>
+            <label id="logo-upload-label" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem .875rem;border:1px dashed #d1d5db;border-radius:var(--r-input);font-size:.8125rem;color:#6b7280;background:#fafafa">
+              <span>🖼 이미지 파일 선택</span>
+              <input type="file" id="blind-logo-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none" onchange="onLogoSelected(this)">
+            </label>
+            <span style="font-size:.75rem;color:#9ca3af;margin-left:.5rem">지원 형식: PNG, JPEG, GIF, WebP</span>
+            <div id="logo-file-list"></div>
+            <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">※ 로고 이미지 검출은 AI를 사용합니다. 해상도가 낮거나 복잡한 배경이 있으면 검출이 누락될 수 있습니다.</p>
+          </div>
         </div>
       </div>
     </div>
-    <div style="padding-top:.5rem">
-      <button class="btn btn-primary btn-full" id="start-btn" onclick="showModal()" disabled>검토 시작</button>
-      <p id="start-hint" class="text-sm text-center mt-2" style="color:#9ca3af">파일을 1개 이상 업로드하면 검토를 시작할 수 있습니다.</p>
+
+    <div class="summary-bar">
+      <div>
+        <p class="bold" id="start-summary-text" style="font-size:.9375rem">파일 0개 · 검출 항목 0개</p>
+        <p id="start-hint" class="text-sm" style="color:#9ca3af;margin-top:.125rem">파일을 1개 이상 업로드하면 검토를 시작할 수 있습니다.</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-outline" onclick="show('dashboard')">취소</button>
+        <button class="btn btn-primary" id="start-btn" onclick="showModal()" disabled>검토 시작 →</button>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ── 결과 ────────────────────────────────────────────── -->
 <div id="page-results" class="page">
-  <nav>
-    <span style="font-size:1.25rem;font-weight:700;color:#7c3aed">제안서 검증 AI</span>
-    <div id="res-nav-title" style="position:absolute;left:50%;transform:translateX(-50%)">
-      <span style="font-size:1.25rem;font-weight:700;color:#4f46e5">제안서 검토 결과</span>
+  <nav class="app-nav">
+    <div class="nav-left">
+      <div class="nav-brand"><span class="logo-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff"/><path d="M9 13l2.2 2.2L15.5 10.5" stroke="#EB008B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-text">제안서 검증 AI</span></div>
+      <div class="nav-tabs"><button class="nav-tab" onclick="createJob()">검토 요청</button><button class="nav-tab active" onclick="show('dashboard')">검토 이력</button></div>
     </div>
-    <div class="flex items-center gap-3">
-      <button class="badge badge-green" style="cursor:pointer;border:none" onclick="show('dashboard')">검토이력 보기</button>
-      <span id="res-username" class="bold" style="color:#065f46"></span>
+    <div class="nav-right">
+      <span id="res-username" class="user-block"></span>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
     </div>
   </nav>
@@ -316,13 +534,34 @@ input:focus{box-shadow:0 0 0 2px #3b82f6;border-color:#3b82f6}
   <div id="res-content" style="display:none">
     <div class="main">
       <div id="res-ai-failure-banner"></div>
-      <div class="summary-grid" id="res-summary"></div>
-      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin:1rem 0">
-        <button class="btn btn-outline btn-sm" id="redo-review-btn" onclick="confirmRedoReview()">↻ 다시 검토</button>
-        <button class="btn btn-outline btn-sm" id="dl-pdf-btn" onclick="downloadPdf()">⬇ PDF 다운로드</button>
-        <button class="btn btn-outline btn-sm" id="dl-word-btn" onclick="downloadWord()">⬇ Word 다운로드</button>
+      <div class="res-header">
+        <div>
+          <p class="res-breadcrumb"><span class="link" onclick="show('dashboard')">검토 이력</span> / <span id="res-date-crumb" class="mono"></span></p>
+          <h1 class="res-title">검토 결과</h1>
+          <p class="res-sub" id="res-subline"></p>
+        </div>
+        <div class="flex gap-2" style="flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" id="redo-review-btn" onclick="confirmRedoReview()">↻ 다시 검토</button>
+          <button class="btn btn-outline btn-sm" id="dl-pdf-btn" onclick="downloadPdf()">⬇ PDF 다운로드</button>
+          <button class="btn btn-outline btn-sm" id="dl-word-btn" onclick="downloadWord()">⬇ Word 다운로드</button>
+        </div>
       </div>
-      <div id="res-body"></div>
+      <div class="summary-grid" id="res-summary" style="margin-bottom:1.5rem"></div>
+      <div class="res-layout">
+        <div class="res-sidebar">
+          <div class="sidebar-box">
+            <p class="sidebar-box-title">확인 진행</p>
+            <p><span class="mono bold" id="confirm-progress-text" style="font-size:1.25rem;color:#111827">0 / 0</span></p>
+            <div class="progress-track"><div class="progress-fill" id="confirm-progress-fill" style="width:0%"></div></div>
+            <p class="progress-note">각 항목을 검토한 뒤 '확인'을 눌러 처리 여부를 표시하세요.</p>
+          </div>
+          <div class="sidebar-box">
+            <p class="sidebar-box-title">검토 파일</p>
+            <div id="res-sidebar-files"></div>
+          </div>
+        </div>
+        <div id="res-body"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -382,6 +621,12 @@ const tk = ()  => localStorage.getItem('access_token');
 const un = ()  => localStorage.getItem('username') || '';
 const esc = s  => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+function userBlockHtml(){
+  const name = un();
+  const initial = (name||'?').trim().charAt(0).toUpperCase() || '?';
+  return `<span class="avatar">${esc(initial)}</span><span class="user-name">${esc(name)}</span>`;
+}
+
 async function api(path, opts={}) {
   const h = { 'Content-Type':'application/json', ...(opts.headers||{}) };
   if (tk()) h['Authorization'] = 'Bearer '+tk();
@@ -422,6 +667,12 @@ function setBtn(id, loading, normal, loadingText) {
 function fmtDate(iso) {
   return new Date(iso).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
+function fmtDateParts(iso){
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace(/\.$/,'');
+  const time = d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+  return {date,time};
+}
 function fmtBytes(b) { return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
 function fileSummary(c) {
   return [c.qualitative&&`정성제안서 ${c.qualitative}개`, c.quantitative&&`정량제안서 ${c.quantitative}개`, c.presentation&&`발표본 ${c.presentation}개`].filter(Boolean).join(' · ') || '파일 없음';
@@ -435,6 +686,15 @@ function show(page) {
 }
 
 /* ── 인증 ─────────────────────────────────────────────── */
+const REMEMBER_KEY = 'remembered_username';
+function initRememberedUser(){
+  const rem = localStorage.getItem(REMEMBER_KEY);
+  if (rem) {
+    const u=$('l-user'); if(u) u.value=rem;
+    const c=$('l-remember'); if(c) c.checked=true;
+  }
+}
+
 async function doLogin() {
   const apiInput = $('l-api');
   if (apiInput && apiInput.value.trim()) {
@@ -448,6 +708,7 @@ async function doLogin() {
     const d = await api('/api/auth/login',{method:'POST',body:JSON.stringify({username:u,password:p})});
     localStorage.setItem('access_token',d.access_token);
     localStorage.setItem('username',u);
+    if ($('l-remember')?.checked) localStorage.setItem(REMEMBER_KEY,u); else localStorage.removeItem(REMEMBER_KEY);
     show('dashboard');
   } catch(e){
     let msg = e.message||'로그인에 실패했습니다.';
@@ -505,15 +766,20 @@ function doLogout() {
   localStorage.removeItem('access_token'); localStorage.removeItem('username');
   if(pollTmr) clearTimeout(pollTmr);
   const u=$('l-user'), p=$('l-pass'); if(u) u.value=''; if(p) p.value='';
+  initRememberedUser();
   show('login');
 }
 
 /* ── 대시보드 ───────────────────────────────────────────── */
+let allJobs = [];
+let dashPage = 1;
+const DASH_PAGE_SIZE = 8;
+
 async function loadDashboard() {
   if(pollTmr) clearTimeout(pollTmr);
   sel.clear(); updateDel();
-  $('d-username').textContent=un();
-  $('d-loading').style.display='block'; $('d-list').innerHTML=''; $('d-empty').style.display='none';
+  $('d-username').innerHTML=userBlockHtml();
+  $('d-loading').style.display='block'; $('d-table-wrap').style.display='none'; $('d-empty').style.display='none';
   try {
     let jobs = await api('/api/jobs');
     // 파일 없는 draft 잡을 단일 batch-delete 요청으로 정리 (기존 N개 개별 요청 → 1회)
@@ -528,16 +794,44 @@ async function loadDashboard() {
     }
     const emptyIdSet=new Set(emptyIds);
     jobs = jobs.filter(j=>j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation>0 || !emptyIdSet.has(j.id));
-    renderJobs(jobs);
+    allJobs = jobs;
+    dashPage = 1;
+    applyDashboardFilters();
     if (jobs.some(j=>j.status==='pending'||j.status==='processing')) pollTmr=setTimeout(loadDashboard,10000);
   } catch(e){ /* ignore */ }
   $('d-loading').style.display='none';
 }
 
+function applyDashboardFilters(){
+  const q = ($('dash-search')?.value||'').trim().toLowerCase();
+  const dateFilter = $('dash-date-filter')?.value||'all';
+  const typeFilter = $('dash-type-filter')?.value||'all';
+  const now = Date.now();
+  let jobs = allJobs.filter(j=>{
+    if (q) {
+      const names = (j.files||[]).map(f=>(f.original_filename||'').toLowerCase());
+      if (!names.some(n=>n.includes(q))) return false;
+    }
+    if (dateFilter!=='all') {
+      const t = new Date(j.created_at).getTime();
+      const days = dateFilter==='today'?1:dateFilter==='7d'?7:30;
+      if (now - t > days*86400000) return false;
+    }
+    if (typeFilter!=='all' && !(j.file_counts[typeFilter]>0)) return false;
+    return true;
+  });
+  renderJobs(jobs);
+}
+
 function renderJobs(jobs) {
-  $('d-empty').style.display = jobs.length===0?'block':'none';
+  const empty = jobs.length===0 && allJobs.length===0;
+  $('d-empty').style.display = empty?'block':'none';
+  $('d-table-wrap').style.display = empty?'none':'block';
+  const totalPages = Math.max(1, Math.ceil(jobs.length/DASH_PAGE_SIZE));
+  if (dashPage>totalPages) dashPage=totalPages;
+  const pageJobs = jobs.slice((dashPage-1)*DASH_PAGE_SIZE, dashPage*DASH_PAGE_SIZE);
   const list=$('d-list'); list.innerHTML='';
-  jobs.forEach(j=>{
+  pageJobs.forEach(j=>{
     let s;
     if (j.status==='draft') {
       const totalFiles=j.file_counts.qualitative+j.file_counts.quantitative+j.file_counts.presentation;
@@ -548,24 +842,49 @@ function renderJobs(jobs) {
     } else {
       s = STATUS[j.status]||{t:j.status,c:'badge-gray'};
     }
-    const rs=j.status==='completed'&&(j.superlative_count>0||j.typo_count>0||(j.blind_count||0)>0||(j.competitor_count||0)>0)
-      ?[j.superlative_count>0&&`최상급 ${j.superlative_count}건`,j.typo_count>0&&`오타 ${j.typo_count}건`,(j.competitor_count||0)>0&&`경쟁사 ${j.competitor_count}건`,(j.blind_count||0)>0&&`블라인드 ${j.blind_count}건`].filter(Boolean).join(' · '):null;
+    const tags=[
+      j.superlative_count>0&&`<span class="tag tag-sup">최상급 ${j.superlative_count}</span>`,
+      j.typo_count>0&&`<span class="tag tag-typ">오타 ${j.typo_count}</span>`,
+      (j.competitor_count||0)>0&&`<span class="tag tag-cmp">경쟁사 ${j.competitor_count}</span>`,
+      (j.blind_count||0)>0&&`<span class="tag tag-bld">블라인드 ${j.blind_count}</span>`,
+    ].filter(Boolean).join('');
+    const totalCount = j.superlative_count+j.typo_count+(j.blind_count||0)+(j.competitor_count||0);
     const isSel=sel.has(j.id);
-    const div=document.createElement('div');
-    div.className='card flex items-center gap-3';
-    if(isSel) div.style.borderColor='#a78bfa';
-    div.innerHTML=`
-      <input type="checkbox" ${isSel?'checked':''} style="width:1rem;height:1rem;accent-color:#7c3aed;flex-shrink:0" onclick="event.stopPropagation();toggleSel('${j.id}',this)">
-      <div style="flex:1;min-width:0">
-        <p class="text-xs text-gray">${fmtDate(j.created_at)}</p>
-        <p style="font-size:.9375rem;color:#374151;margin-top:.125rem">${fileSummary(j.file_counts)}</p>
-        ${rs?`<p class="text-xs text-gray mt-1">${rs}</p>`:''}
-      </div>
-      <span class="badge ${s.c}">${s.s?'<span class="spinner"></span>':''}${s.t}</span>`;
-    div.onclick=e=>{ if(sel.size>0)return; j.status==='draft'?openUpload(j.id):openResults(j.id); };
-    list.appendChild(div);
+    const dp = fmtDateParts(j.created_at);
+    const row=document.createElement('div');
+    row.className='hist-row hist-row-body';
+    if(isSel) row.style.background='var(--pink-bg-soft)';
+    row.innerHTML=`
+      <span onclick="event.stopPropagation()"><input type="checkbox" ${isSel?'checked':''} style="width:1rem;height:1rem;accent-color:var(--pink)" onclick="event.stopPropagation();toggleSel('${j.id}',this)"></span>
+      <span class="hist-date">${dp.date}<br>${dp.time}</span>
+      <span>
+        <span class="hist-target-type">${LABELS[j.files?.[0]?.proposal_type] || '제안서'}</span>
+        <span class="hist-target-sub">${esc(fileSummary(j.file_counts))}${j.status==='completed'?` · 총 ${totalCount}건 검출`:''}</span>
+      </span>
+      <span class="hist-tags">${tags || `<span class="badge ${s.c}">${s.s?'<span class="spinner"></span>':''}${s.t}</span>`}</span>
+      <span style="text-align:right"><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();${j.status==='draft'?`openUpload('${j.id}')`:`openResults('${j.id}')`}">${j.status==='draft'?'이어서 작성':'결과 보기'} →</button></span>`;
+    row.onclick=()=>{ if(sel.size>0)return; j.status==='draft'?openUpload(j.id):openResults(j.id); };
+    list.appendChild(row);
   });
+  renderDashPagination(jobs.length, totalPages);
 }
+
+function renderDashPagination(total, totalPages){
+  const el=$('dash-pagination'); if(!el) return;
+  if (total===0) { el.innerHTML=''; return; }
+  const start = total===0?0:(dashPage-1)*DASH_PAGE_SIZE+1;
+  const end = Math.min(dashPage*DASH_PAGE_SIZE, total);
+  let btns='';
+  for(let p=1;p<=totalPages;p++){
+    btns+=`<button class="page-btn ${p===dashPage?'active':''}" onclick="goDashPage(${p})">${p}</button>`;
+  }
+  el.innerHTML = `<span>${start}–${end} 표시 (총 ${total}건)</span><div class="page-btns">
+    <button class="page-btn" ${dashPage<=1?'disabled':''} onclick="goDashPage(${dashPage-1})">‹</button>
+    ${btns}
+    <button class="page-btn" ${dashPage>=totalPages?'disabled':''} onclick="goDashPage(${dashPage+1})">›</button>
+  </div>`;
+}
+function goDashPage(p){ dashPage=p; applyDashboardFilters(); }
 
 function toggleSel(id,chk){ chk.checked?sel.add(id):sel.delete(id); updateDel(); }
 function toggleAll(){ const c=$('chk-all').checked; document.querySelectorAll('#d-list input[type=checkbox]').forEach(x=>{x.checked=c;const m=x.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];if(m){c?sel.add(m):sel.delete(m);}}); updateDel(); }
@@ -589,10 +908,11 @@ async function confirmDeleteSelected(){
 }
 
 async function createJob(){
-  setBtn('new-btn',true,'+ 제안서 검토 요청','생성 중...');
+  const btnDisabled = $('new-btn');
+  if (btnDisabled) setBtn('new-btn',true,'+ 새 검토 요청','생성 중...');
   try {
     // 이미 작성 중인(검토 시작 전) draft 건이 있으면 새로 만들지 않고 이어서 사용한다.
-    // (예: 업로드 중 이력 화면으로 갔다가 다시 "+ 제안서 검토 요청"을 누르는 경우
+    // (예: 업로드 중 이력 화면으로 갔다가 다시 "+ 새 검토 요청"을 누르는 경우
     //  빈 draft 건이 계속 새로 생성되어 이력 목록에 파일없음 박스가 쌓이는 문제 방지)
     const jobs = await api('/api/jobs');
     const existingDraft = jobs.find(j=>j.status==='draft');
@@ -600,7 +920,7 @@ async function createJob(){
     const d=await api('/api/jobs',{method:'POST'}); openUpload(d.job_id);
   }
   catch(e){ toast(e.message||'검토 요청을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.','error'); }
-  finally { setBtn('new-btn',false,'+ 제안서 검토 요청','생성 중...'); }
+  finally { if (btnDisabled) setBtn('new-btn',false,'+ 새 검토 요청','생성 중...'); }
 }
 
 /* ── 업로드 ──────────────────────────────────────────── */
@@ -611,8 +931,13 @@ async function openUpload(id){
   const bSec=$('blind-eval-section'); if(bSec) bSec.style.display='none';
   const supChk=$('superlative-eval-chk'); if(supChk) supChk.checked=true;
   const typoChk=$('typo-eval-chk'); if(typoChk) typoChk.checked=false;
+  const compChk=$('competitor-eval-chk'); if(compChk) compChk.checked=false;
+  const compSec=$('competitor-eval-section'); if(compSec) compSec.style.display='none';
+  competitorEval=false; competitorKeywords=[];
   renderLogoFiles();
-  $('u-username').textContent=un();
+  ['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk'].forEach(markCard);
+  updateDetectionCount();
+  $('u-username').innerHTML=userBlockHtml();
   ['qualitative','quantitative','presentation'].forEach(t=>renderSec(t));
   updateStart(); show('upload');
 
@@ -633,40 +958,48 @@ async function openUpload(id){
 function renderSec(type){
   const multi=type!=='presentation';
   const con=$('sec-'+type); con.innerHTML='';
+  const hasFiles=files[type].length>0;
   const canUp=multi||files[type].length===0;
   const fHtml=files[type].map((f,i)=>`
     <div class="file-item">
       <div style="min-width:0;margin-right:1rem">
-        <p style="font-size:.9375rem;color:#1f2937" class="truncate">${esc(f.original_filename)}</p>
-        <p class="text-xs text-gray">${fmtBytes(f.file_size_bytes)}</p>
+        <p style="font-size:.875rem;color:#1f2937" class="truncate">${esc(f.original_filename)}</p>
+        <p class="text-xs text-gray mono">${fmtBytes(f.file_size_bytes)}</p>
       </div>
       <div style="display:flex;align-items:center;gap:.125rem;flex-shrink:0">
         ${files[type].length>1?`
-        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;opacity:${i===0?'.35':'1'}" ${i===0?'disabled':''} onclick="moveFile('${type}',${i},-1)" aria-label="위로 이동" title="위로 이동">▲</button>
-        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;opacity:${i===files[type].length-1?'.35':'1'}" ${i===files[type].length-1?'disabled':''} onclick="moveFile('${type}',${i},1)" aria-label="아래로 이동" title="아래로 이동">▼</button>
+        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;height:auto;opacity:${i===0?'.35':'1'}" ${i===0?'disabled':''} onclick="moveFile('${type}',${i},-1)" aria-label="위로 이동" title="위로 이동">▲</button>
+        <button class="btn btn-sm" style="color:#6b7280;background:none;padding:.125rem .375rem;height:auto;opacity:${i===files[type].length-1?'.35':'1'}" ${i===files[type].length-1?'disabled':''} onclick="moveFile('${type}',${i},1)" aria-label="아래로 이동" title="아래로 이동">▼</button>
         `:''}
-        <button class="btn btn-sm" style="color:#ef4444;background:none;padding:0" onclick="delFile('${type}','${f.id}')">삭제</button>
+        <button class="btn btn-sm" style="color:#ef4444;background:none;padding:0;height:auto" onclick="delFile('${type}','${f.id}')">삭제</button>
       </div>
     </div>`).join('');
   const sec=document.createElement('div');
   sec.className='upload-section';
   sec.innerHTML=`
-    <div class="flex items-center gap-2" style="margin-bottom:.75rem">
+    <div class="up-sec-hdr">
       <span class="bold" style="font-size:.9375rem">${LABELS[type]}</span>
-      <span class="text-xs text-gray" style="background:#f3f4f6;padding:.125rem .5rem;border-radius:9999px">${multi?'다중 파일':'1개'}</span>
+      <span class="up-sec-badge">${multi?'다중 파일':'1개만'}</span>
+      <span class="up-sec-count mono">${files[type].length}개</span>
     </div>
-    ${canUp?`
+    <div>${fHtml}</div>
+    ${canUp && !hasFiles ? `
     <div class="drop-zone" id="dz-${type}" onclick="$('fi-${type}').click()">
-      <p class="text-sm text-gray">클릭하거나 파일을 드래그하세요</p>
-      <p class="text-xs text-gray mt-1">.ppt .pptx .doc .docx .pdf · 최대 2GB</p>
+      <div class="dz-icon">⬆</div>
+      <p class="text-sm" style="color:#374151;font-weight:600">파일을 끌어다 놓거나 <span class="link">찾아보기</span></p>
+      <p class="text-xs text-gray mt-1">${multi?'여러 파일을 한 번에 올릴 수 있습니다':'발표 자료 1개'}</p>
       <input type="file" id="fi-${type}" style="display:none" ${multi?'multiple':''} accept=".ppt,.pptx,.doc,.docx,.pdf" onchange="handleInput('${type}',this,${multi})">
-    </div>`:''}
-    <div id="up-${type}" style="display:none"><div class="upload-in-progress"><div class="spinner" style="border-color:#3b82f6;border-top-color:transparent"></div>파일을 업로드하는 중입니다...</div></div>
-    <div id="err-${type}" class="error-msg" style="display:none;margin-top:.5rem"></div>
-    <div>${fHtml}</div>`;
+    </div>` : ''}
+    ${canUp && hasFiles ? `
+    <div class="add-more-row" onclick="$('fi-${type}').click()">
+      <span>+ 파일 추가</span>
+      <input type="file" id="fi-${type}" style="display:none" ${multi?'multiple':''} accept=".ppt,.pptx,.doc,.docx,.pdf" onchange="handleInput('${type}',this,${multi})">
+    </div>` : ''}
+    <div id="up-${type}" style="display:none"><div class="upload-in-progress"><div class="spinner" style="border-color:var(--pink);border-top-color:transparent"></div>파일을 업로드하는 중입니다...</div></div>
+    <div id="err-${type}" class="error-msg" style="display:none;margin-top:.5rem"></div>`;
   con.appendChild(sec);
-  if(canUp){
-    const dz=sec.querySelector('.drop-zone');
+  const dz=sec.querySelector('.drop-zone');
+  if(dz){
     dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
     dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
     dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');handleFiles(type,Array.from(e.dataTransfer.files),multi);});
@@ -720,11 +1053,43 @@ async function delFile(type,fid){
 
 function updateStart(){
   const n=files.qualitative.length+files.quantitative.length+files.presentation.length;
-  $('start-btn').disabled=n===0; $('start-hint').style.display=n>0?'none':'block';
+  const detN = ['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk'].filter(id=>$(id)?.checked).length;
+  $('start-btn').disabled=n===0;
+  const txt=$('start-summary-text'); if(txt) txt.textContent=`파일 ${n}개 · 검출 항목 ${detN}개`;
+  const hint=$('start-hint');
+  if(hint) hint.textContent = n===0 ? '파일을 1개 이상 업로드하면 검토를 시작할 수 있습니다.' : '검토가 끝나면 검토 이력에서 결과를 확인할 수 있습니다.';
 }
 
 function showModal(){ $('modal').style.display='flex'; }
 function hideModal(){ $('modal').style.display='none'; }
+
+/* ── 검출 항목 카드 ───────────────────────────────────── */
+function markCard(chkId){
+  const chk=$(chkId); if(!chk) return;
+  const card=chk.closest('.det-card');
+  if(card) card.classList.toggle('selected', chk.checked);
+}
+function toggleDetCard(e,chkId){
+  if(e.target && e.target.tagName==='INPUT') { updateDetectionCount(); return; }
+  const chk=$(chkId); if(!chk) return;
+  chk.checked=!chk.checked;
+  chk.dispatchEvent(new Event('change'));
+}
+function updateDetectionCount(){
+  const ids=['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk'];
+  const n = ids.filter(id=>$(id)?.checked).length;
+  const el=$('det-count'); if(el) el.textContent=`${n}개 선택됨`;
+  ids.forEach(markCard);
+  updateStart();
+}
+function selectAllDetectionTypes(){
+  const ids=['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk'];
+  const allOn = ids.every(id=>$(id)?.checked);
+  ids.forEach(id=>{ const chk=$(id); if(chk) chk.checked=!allOn; });
+  toggleCompetitorEval();
+  toggleBlindEval();
+  updateDetectionCount();
+}
 
 /* ── 블라인드 평가 ────────────────────────────────────── */
 function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -732,6 +1097,9 @@ function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 function toggleCompetitorEval(){
   competitorEval=$('competitor-eval-chk').checked;
   $('competitor-eval-section').style.display=competitorEval?'block':'none';
+  markCard('competitor-eval-chk'); updateStart();
+  if(competitorEval && competitorKeywords.length===0){ /* keep empty until user adds */ }
+  const el=$('det-count'); if(el){ const ids=['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk']; el.textContent=`${ids.filter(id=>$(id)?.checked).length}개 선택됨`; }
 }
 
 function addCompetitorKeyword(){
@@ -751,7 +1119,7 @@ function renderCompetitorKeywords(){
   if(!c) return;
   c.innerHTML=competitorKeywords.map((k,i)=>`
     <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
-      <input type="text" value="${escAttr(k.value)}" placeholder="예: KT, SK" oninput="updateCompetitorKeywordValue(${i},this.value)" style="flex:1;padding:.35rem .75rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem">
+      <input type="text" class="kw-input" value="${escAttr(k.value)}" placeholder="예: KT, SK" oninput="updateCompetitorKeywordValue(${i},this.value)" style="flex:1">
       <button onclick="removeCompetitorKeyword(${i})" aria-label="경쟁사 항목 삭제" title="삭제" style="padding:.25rem .5rem;color:#9ca3af;background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1">✕</button>
     </div>
   `).join('');
@@ -761,6 +1129,8 @@ function toggleBlindEval(){
   blindEval=$('blind-eval-chk').checked;
   $('blind-eval-section').style.display=blindEval?'':'none';
   if(blindEval&&blindKeywords.length===0) addBlindKeyword();
+  markCard('blind-eval-chk'); updateStart();
+  const el=$('det-count'); if(el){ const ids=['superlative-eval-chk','typo-eval-chk','competitor-eval-chk','blind-eval-chk']; el.textContent=`${ids.filter(id=>$(id)?.checked).length}개 선택됨`; }
 }
 
 function addBlindKeyword(){
@@ -781,12 +1151,12 @@ function renderBlindKeywords(){
   if(!c) return;
   c.innerHTML=blindKeywords.map((k,i)=>`
     <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
-      <select onchange="updateBlindKeywordType(${i},this.value)" style="padding:.35rem .5rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem;color:#374151;background:#fff">
+      <select class="kw-select" onchange="updateBlindKeywordType(${i},this.value)">
         <option${k.type==='회사명'?' selected':''}>회사명</option>
         <option${k.type==='대표자명'?' selected':''}>대표자명</option>
         <option${k.type==='기타'?' selected':''}>기타</option>
       </select>
-      <input type="text" value="${escAttr(k.value)}" placeholder="예: LG유플러스" oninput="updateBlindKeywordValue(${i},this.value)" style="flex:1;padding:.35rem .75rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.8125rem">
+      <input type="text" class="kw-input" value="${escAttr(k.value)}" placeholder="예: LG유플러스" oninput="updateBlindKeywordValue(${i},this.value)" style="flex:1">
       <button onclick="removeBlindKeyword(${i})" aria-label="항목 삭제" title="삭제" style="padding:.25rem .5rem;color:#9ca3af;background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1">✕</button>
     </div>
   `).join('');
@@ -857,7 +1227,7 @@ function openResults(id){
   stopStageCycle();
   const msgEl=$('loading-stage-msg'); if(msgEl) msgEl.textContent='검토 준비 중...';
   [$('lstep-1'),$('lstep-2'),$('lstep-3')].forEach(d=>d&&d.classList.remove('active'));
-  $('res-username').textContent=un();
+  $('res-username').innerHTML=userBlockHtml();
   $('res-loading').style.display='block'; $('res-content').style.display='none'; $('res-failed').style.display='none';
   show('results'); poll();
 }
@@ -987,6 +1357,7 @@ function boldCtx(ctx, det, color){
   return esc(full.slice(0,i))+open+esc(full.slice(i,i+det.length))+'</strong>'+esc(full.slice(i+det.length));
 }
 
+/* buildPdfHtml: PDF 출력물은 기존 디자인을 그대로 유지한다 (화면 UI와는 별개 스타일). */
 function buildPdfHtml(data){
   const s=data.summary;
   const hasSuperlative=data.superlative_eval!==false;
@@ -1078,17 +1449,64 @@ function hlCtx(ctx,det,color){
   return esc(ctx.slice(0,i))+open+esc(ctx.slice(i,i+det.length))+'</strong>'+esc(ctx.slice(i+det.length));
 }
 
+/* ── 항목별 안내 문구 (정적 템플릿 — API가 제공하지 않는 보조 설명을
+   category/detected_text만으로 클라이언트에서 구성) ────────────── */
+function adviceText(cat, det){
+  const d = det||'';
+  if (cat==='superlative') {
+    if (d.includes('최초')) return `"${d}"는 객관적 근거 없이 쓰이면 허위·과장 표현으로 판단될 수 있습니다. 인증 기관과 일자 등 근거를 함께 표기하세요.`;
+    if (d.includes('유일')) return `"${d}"은 사실 확인이 필요한 단정 표현입니다. 수상 연도와 주관 기관을 명시하는 방식을 권장합니다.`;
+    if (d.includes('최대')) return `"${d}"는 비교 기준이 불명확하면 과장 표현으로 보일 수 있습니다. 비교 대상과 근거를 함께 제시하세요.`;
+    if (d.includes('최고')) return `"${d}"는 주관적 평가로 비칠 수 있습니다. 객관적 수치나 순위 근거를 함께 표기하세요.`;
+    if (d.includes('가장')) return `"${d}"는 비교 기준·출처가 없으면 과장 표현으로 판단될 수 있습니다.`;
+    return `"${d}"는 객관적 근거 없이 쓰이면 허위·과장 표현으로 판단될 수 있습니다.`;
+  }
+  if (cat==='competitor') return '경쟁사를 직접 언급한 우위 주장은 감점 사유가 될 수 있습니다. 자사 실적 중심으로 서술하세요.';
+  if (cat==='blind') return '회사 브랜드·연락처 표기는 제안사를 특정할 수 있어 블라인드 평가 위반 소지가 있습니다.';
+  if (cat==='blind_image') return '로고·CI 이미지는 블라인드 평가 시 삭제하거나 가려야 합니다.';
+  return '';
+}
+
+/* ── 확인 상태 (localStorage, 순수 프론트엔드 상태) ──────────── */
+const CONFIRM_KEY='confirmed_results';
+function getConfirmedSet(jid){
+  try { const all=JSON.parse(localStorage.getItem(CONFIRM_KEY)||'{}'); return new Set(all[jid]||[]); }
+  catch(e){ return new Set(); }
+}
+function saveConfirmedSet(jid,set){
+  let all={};
+  try { all=JSON.parse(localStorage.getItem(CONFIRM_KEY)||'{}'); } catch(e){}
+  all[jid]=[...set];
+  localStorage.setItem(CONFIRM_KEY, JSON.stringify(all));
+}
+function toggleConfirm(resultId){
+  const set=getConfirmedSet(jobId);
+  set.has(resultId)?set.delete(resultId):set.add(resultId);
+  saveConfirmedSet(jobId,set);
+  renderResultBody();
+}
+
 let resultData = null;
+let activeResultFilter = null;
 function renderResults(data){
   stopStageCycle();
   resultData = data;
+  activeResultFilter = null;
   $('res-loading').style.display='none'; $('res-content').style.display='block';
+  const dp = fmtDateParts(data.created_at||new Date().toISOString());
+  const crumb=$('res-date-crumb'); if(crumb) crumb.textContent=`${dp.date} ${dp.time}`;
+  renderResultBody();
+}
+
+function renderResultBody(){
+  const data = resultData;
+  if (!data) return;
   const s=data.summary;
   const allFiles=data.proposal_types.flatMap(pt=>pt.files);
   const failedFiles=allFiles.filter(f=>(f.parse_error||'').includes('전부 실패'));
   const banner=$('res-ai-failure-banner');
   banner.innerHTML = failedFiles.length ? `
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.625rem">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-card);padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.625rem">
       <svg width="20" height="20" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
       <div style="flex:1">
         <p class="bold" style="color:#991b1b;font-size:.9375rem">파일 ${failedFiles.length}개의 AI 검토가 실패했습니다</p>
@@ -1100,98 +1518,135 @@ function renderResults(data){
   const hasTypo=data.typo_eval!==false;
   const hasBlind=data.blind_eval;
   const hasCompetitor=data.competitor_eval;
+  const totalFileCount=data.proposal_types.reduce((n,pt)=>n+pt.files.length,0);
+  const totalCount=(s.total_superlative||0)+(s.total_typo||0)+(s.total_competitor||0)+(s.total_blind||0);
+
+  const subline=$('res-subline');
+  if(subline) subline.textContent = `${esc(data.proposal_types.map(pt=>`${pt.label} ${pt.files.length}개`).join(', '))} · 총 ${totalCount}건 검출`;
+
   const sg=$('res-summary');
-  const colCount=1+(hasSuperlative?1:0)+(hasTypo?1:0)+(hasBlind?1:0)+(hasCompetitor?1:0);
-  sg.style.gridTemplateColumns=`repeat(${colCount},1fr)`;
-  sg.innerHTML=`
-    ${hasSuperlative?`<div class="summary-card ${s.total_superlative===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">최상급 표현</p><p class="text-xs" style="margin-bottom:.375rem;color:#b45309">허위·과장 가능 문구</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#f59e0b">${s.total_superlative}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    ${hasTypo?`<div class="summary-card ${s.total_typo===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">오타</p><p class="text-xs" style="margin-bottom:.375rem;color:#6d28d9">맞춤법 및 철자 오류</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#7c3aed">${s.total_typo}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    ${hasCompetitor?`<div class="summary-card ${(s.total_competitor||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">경쟁사 비교/비방</p><p class="text-xs" style="margin-bottom:.375rem;color:#0369a1">비교·비방 표현</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#0ea5e9">${s.total_competitor||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    ${hasBlind?`<div class="summary-card ${(s.total_blind||0)===0?'is-zero':'has-issues'}"><p class="text-sm text-gray" style="margin-bottom:.125rem">블라인드 평가</p><p class="text-xs" style="margin-bottom:.375rem;color:#b91c1c">회사 식별정보</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#ef4444">${s.total_blind||0}</p><p class="text-xs text-gray mt-1">건 검출</p></div>`:''}
-    <div class="summary-card"><p class="text-sm text-gray" style="margin-bottom:.125rem">검토 파일수</p><p class="text-xs" style="margin-bottom:.375rem;color:#1d4ed8">${esc(data.proposal_types.map(pt=>`${pt.label} ${pt.files.length}개`).join(', '))}</p><p class="issue-count" style="font-size:1.875rem;font-weight:700;color:#3b82f6">${data.proposal_types.reduce((n,pt)=>n+pt.files.length,0)}</p><p class="text-xs text-gray mt-1">개</p></div>`;
+  const cards=[];
+  cards.push({key:null,label:'전체',sub:'모든 검출 항목',count:totalCount,cls:''});
+  if(hasSuperlative) cards.push({key:'superlative',label:'최상급 표현',sub:'허위·과장 가능 문구',count:s.total_superlative,cls:'tag-sup',text:'var(--sup-text)'});
+  if(hasTypo) cards.push({key:'typo',label:'오타',sub:'맞춤법 및 철자 오류',count:s.total_typo,cls:'tag-typ',text:'var(--typ-text)'});
+  if(hasCompetitor) cards.push({key:'competitor',label:'경쟁사 비교·비방',sub:'비교·비방 표현',count:s.total_competitor||0,cls:'tag-cmp',text:'var(--cmp-text)'});
+  if(hasBlind) cards.push({key:'blind',label:'블라인드 평가',sub:'회사 식별정보',count:s.total_blind||0,cls:'tag-bld',text:'var(--bld-text)'});
+  sg.style.gridTemplateColumns=`repeat(${cards.length},1fr)`;
+  sg.innerHTML=cards.map(c=>`
+    <button class="summary-card ${activeResultFilter===c.key?'active':''}" onclick="setResultFilter(${c.key?`'${c.key}'`:'null'})">
+      <p class="sc-label">${c.label}</p>
+      <p class="sc-sub" style="color:${c.text||'#6b7280'}">${c.sub}</p>
+      <p class="sc-count mono" style="color:${c.text||'#111827'}">${c.count}</p>
+      <p class="text-xs text-gray mt-1">건 검출</p>
+    </button>`).join('');
+
+  // 확인 진행률 (전체 결과 건수 기준, localStorage)
+  const confirmedSet=getConfirmedSet(jobId);
+  const confirmedCount=[...confirmedSet].filter(id=>allFiles.some(f=>f.results.some(r=>r.id===id))).length;
+  const pct = totalCount>0 ? Math.round(confirmedCount/totalCount*100) : 0;
+  const pt=$('confirm-progress-text'); if(pt) pt.textContent=`${confirmedCount} / ${totalCount}`;
+  const pf=$('confirm-progress-fill'); if(pf) pf.style.width=pct+'%';
+
+  // 사이드바 파일 목록
+  const sbFiles=$('res-sidebar-files');
+  if(sbFiles){
+    sbFiles.innerHTML = allFiles.map(f=>`
+      <div class="sidebar-file" onclick="document.getElementById('file-card-${f.file_id}')?.scrollIntoView({behavior:'smooth',block:'start'})" style="margin-bottom:.5rem">
+        <span class="sidebar-file-icon">${(f.original_filename||'?').split('.').pop().slice(0,3).toUpperCase()}</span>
+        <div style="min-width:0">
+          <p class="text-xs bold truncate" style="color:#111827;max-width:9rem">${esc(f.original_filename)}</p>
+          <p class="text-xs text-gray mono">${f.total_pages?f.total_pages+'페이지 · ':''}${(f.results||[]).length}건</p>
+        </div>
+      </div>`).join('') || '<p class="text-xs text-gray">파일 없음</p>';
+  }
+
   const activeLabels=[hasSuperlative&&'최상급 표현',hasTypo&&'오타',hasCompetitor&&'경쟁사 비교/비방',hasBlind&&'식별정보'].filter(Boolean).join(', ')||'선택한 항목';
   const body=$('res-body'); body.innerHTML='';
+  const filter=activeResultFilter;
   data.proposal_types.forEach(pt=>{
     const tot=pt.files.reduce((n,f)=>n+f.superlative_count+f.typo_count+(f.blind_count||0)+(f.competitor_count||0),0);
     const sec=document.createElement('div'); sec.style.marginBottom='1.5rem';
     sec.innerHTML=`<div class="flex items-center gap-2" style="margin-bottom:.75rem">
       <span class="bold" style="font-size:.9375rem">${pt.label}</span>
       <span class="text-sm text-gray">${pt.files.length}개 파일</span>
-      ${tot>0?`<span class="text-xs" style="background:#f3f4f6;color:#4b5563;padding:.125rem .5rem;border-radius:9999px;font-weight:500">총 ${tot}건 검출</span>`:''}
+      ${tot>0?`<span class="text-xs mono" style="background:#f3f4f6;color:#4b5563;padding:.125rem .5rem;border-radius:9999px;font-weight:600">총 ${tot}건 검출</span>`:''}
     </div>`;
+    let anyFileShown=false;
     pt.files.forEach(f=>{
       const sups=f.results.filter(r=>r.category==='superlative');
       const typs=f.results.filter(r=>r.category==='typo');
       const comps=f.results.filter(r=>r.category==='competitor');
       const blds=f.results.filter(r=>r.category==='blind');
       const bldImgs=f.results.filter(r=>r.category==='blind_image');
+      const catVisible = cat => !filter || filter===cat || (filter==='blind' && cat==='blind_image');
+      if (filter && (f.results.length>0) ) {
+        const matchCount = f.results.filter(r=>catVisible(r.category)).length;
+        if (matchCount===0 && !f.parse_error) return; // 필터와 무관한 파일은 숨김
+      }
+      anyFileShown=true;
       let bHtml='';
       const isTotalFail=(f.parse_error||'').includes('전부 실패');
-      if(f.parse_error) bHtml+= isTotalFail ? `<div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#991b1b;font-weight:600">✕ 검토 실패 — 이 파일은 검토되지 못했습니다</p><p class="text-xs" style="color:#b91c1c;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`
-        : `<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:600">이 파일 처리 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
+      if(f.parse_error) bHtml+= isTotalFail ? `<div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#991b1b;font-weight:700">✕ 검토 실패 — 이 파일은 검토되지 못했습니다</p><p class="text-xs" style="color:#b91c1c;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`
+        : `<div style="background:#fffbeb;border-bottom:1px solid #fef3c7;padding:.875rem 1.25rem;display:flex;align-items:flex-start;gap:.625rem"><svg width="16" height="16" fill="none" stroke="#b45309" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:.125rem"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div><p class="text-sm" style="color:#92400e;font-weight:700">이 파일 처리 중 문제가 발생했습니다</p><p class="text-xs" style="color:#b45309;margin-top:.25rem">${esc(f.parse_error)}</p></div></div>`;
       if(!f.results.length&&!f.parse_error) bHtml+=`<div class="result-clean"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>검출된 이슈 없음 — 이 파일에서 ${esc(activeLabels)}이(가) 발견되지 않았습니다.</div>`;
-      if(sups.length){
-        bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:#f59e0b;margin-top:0"></span><span class="text-sm bold" style="color:#92400e">최상급 표현(허위·과장 가능 문구) (${sups.length}건)</span></div>`;
-        sups.forEach((r,i)=>bHtml+=`<div class="result-item sup" ${i<sups.length-1?'style="border-bottom:1px solid rgba(251,191,36,.12)"':''}>
-          <span class="pg-badge" style="color:#d97706">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#b45309;background:#fef3c7;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">검토 필요</span></div>
-        </div>`);
-      }
-      if(typs.length){
-        bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:#7c3aed;margin-top:0"></span><span class="text-sm bold" style="color:#5b21b6">오타 (${typs.length}건)</span></div>`;
-        typs.forEach((r,i)=>bHtml+=`<div class="result-item typ" ${i<typs.length-1?'style="border-bottom:1px solid rgba(109,40,217,.08)"':''}>
-          <span class="pg-badge" style="color:#7c3aed">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          ${r.suggestion?`<p class="text-xs mt-1" style="color:#6d28d9">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
+      const row=(r,cls,label,dotVar)=>{
+        const confirmed=confirmedSet.has(r.id);
+        const advice=adviceText(r.category,r.detected_text);
+        return `<div class="result-item ${cls}">
+          <span class="pg-badge" style="color:var(--${dotVar}-accent)">[${r.page_number}p]</span>
+          <div style="min-width:0;flex:1">
+            <p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
+            ${r.suggestion?`<div class="suggestion-box"><span class="sb-label">수정 제안</span><span>${esc(r.suggestion)}</span></div>`:''}
+            ${advice?`<p class="advice-note">${esc(advice)}</p>`:''}
           </div>
-        </div>`);
+          <button class="confirm-btn ${confirmed?'on':''}" onclick="toggleConfirm('${r.id}')">${confirmed?'✓ 확인됨':'확인'}</button>
+        </div>`;
+      };
+      if(sups.length && catVisible('superlative')){
+        bHtml+=`<div class="result-sec-hdr sup"><span class="dot" style="background:var(--sup-accent)"></span><span class="text-sm bold" style="color:var(--sup-text)">최상급 표현(허위·과장 가능 문구) (${sups.length}건)</span></div>`;
+        sups.forEach(r=>bHtml+=row(r,'sup','최상급','sup'));
       }
-      if(comps.length){
-        bHtml+=`<div class="result-sec-hdr" style="background:#f0f9ff;border-bottom:1px solid #e0f2fe"><span class="dot" style="background:#0ea5e9;margin-top:0"></span><span class="text-sm bold" style="color:#0369a1">경쟁사 비교/비방 표현 (${comps.length}건)</span></div>`;
-        comps.forEach((r,i)=>bHtml+=`<div class="result-item" style="background:#f8fbff${i<comps.length-1?';border-bottom:1px solid rgba(14,165,233,.1)':''}">
-          <span class="pg-badge" style="color:#0284c7">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          ${r.suggestion?`<p class="text-xs mt-1" style="color:#0369a1">→ 수정 제안: <strong>${esc(r.suggestion)}</strong></p>`:''}
-          <span style="font-size:.75rem;font-weight:500;color:#0369a1;background:#e0f2fe;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">검토 필요</span></div>
-        </div>`);
+      if(typs.length && catVisible('typo')){
+        bHtml+=`<div class="result-sec-hdr typ"><span class="dot" style="background:var(--typ-accent)"></span><span class="text-sm bold" style="color:var(--typ-text)">오타 (${typs.length}건)</span></div>`;
+        typs.forEach(r=>bHtml+=row(r,'typ','오타','typ'));
       }
-      if(blds.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
-        blds.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<blds.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
-          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context,r.detected_text,'#2563eb')}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#dc2626;background:#fee2e2;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">${r.detected_text||'식별 정보'} 검출</span></div>
-        </div>`);
+      if(comps.length && catVisible('competitor')){
+        bHtml+=`<div class="result-sec-hdr cmp"><span class="dot" style="background:var(--cmp-accent)"></span><span class="text-sm bold" style="color:var(--cmp-text)">경쟁사 비교/비방 표현 (${comps.length}건)</span></div>`;
+        comps.forEach(r=>bHtml+=row(r,'cmp','경쟁사','cmp'));
       }
-      if(bldImgs.length){
-        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:#ef4444;margin-top:0"></span><span class="text-sm bold" style="color:#991b1b">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
-        bldImgs.forEach((r,i)=>bHtml+=`<div class="result-item bld" ${i<bldImgs.length-1?'style="border-bottom:1px solid rgba(239,68,68,.08)"':''}>
-          <span class="pg-badge" style="color:#dc2626">[${r.page_number}p]</span>
-          <div style="min-width:0"><p style="font-size:.9375rem;color:#1f2937;line-height:1.6">${hlCtx(r.context||r.detected_text,r.detected_text,'#2563eb')}</p>
-          <span style="font-size:.75rem;font-weight:500;color:#dc2626;background:#fee2e2;padding:.125rem .5rem;border-radius:9999px;display:inline-block;margin-top:.375rem">🖼 ${r.detected_text||'이미지'} 검출</span></div>
-        </div>`);
+      if(blds.length && catVisible('blind')){
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:var(--bld-accent)"></span><span class="text-sm bold" style="color:var(--bld-text)">블라인드 평가: 회사식별정보(텍스트) (${blds.length}건)</span></div>`;
+        blds.forEach(r=>bHtml+=row(r,'bld','블라인드','bld'));
       }
-      const fc=document.createElement('div'); fc.className='result-file';
+      if(bldImgs.length && catVisible('blind_image')){
+        bHtml+=`<div class="result-sec-hdr bld"><span class="dot" style="background:var(--bld-accent)"></span><span class="text-sm bold" style="color:var(--bld-text)">블라인드 평가: 회사식별정보(이미지) (${bldImgs.length}건)</span></div>`;
+        bldImgs.forEach(r=>bHtml+=row(r,'bld','블라인드','bld'));
+      }
+      const fc=document.createElement('div'); fc.className='result-file'; fc.id=`file-card-${f.file_id}`;
       fc.innerHTML=`<div class="result-file-hdr" onclick="toggleCard(this)">
         <div class="flex items-center gap-2" style="min-width:0">
           <span class="bold truncate" style="font-size:.9375rem">${esc(f.original_filename)}</span>
-          ${f.total_pages!=null?`<span class="text-xs text-gray" style="flex-shrink:0">${f.total_pages}p</span>`:''}
+          ${f.total_pages!=null?`<span class="text-xs text-gray mono" style="flex-shrink:0">${f.total_pages}p</span>`:''}
         </div>
         <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:1rem">
-          ${f.superlative_count>0?`<span class="text-xs" style="background:#fffbeb;color:#b45309;padding:.125rem .5rem;border-radius:9999px;font-weight:500">최상급 ${f.superlative_count}건</span>`:''}
-          ${f.typo_count>0?`<span class="text-xs" style="background:#f5f3ff;color:#6d28d9;padding:.125rem .5rem;border-radius:9999px;font-weight:500">오타 ${f.typo_count}건</span>`:''}
-          ${(f.competitor_count||0)>0?`<span class="text-xs" style="background:#e0f2fe;color:#0369a1;padding:.125rem .5rem;border-radius:9999px;font-weight:500">경쟁사 ${f.competitor_count}건</span>`:''}
-          ${(f.blind_count||0)>0?`<span class="text-xs" style="background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:500">블라인드 ${f.blind_count}건</span>`:''}
+          ${f.superlative_count>0?`<span class="tag tag-sup">최상급 ${f.superlative_count}</span>`:''}
+          ${f.typo_count>0?`<span class="tag tag-typ">오타 ${f.typo_count}</span>`:''}
+          ${(f.competitor_count||0)>0?`<span class="tag tag-cmp">경쟁사 ${f.competitor_count}</span>`:''}
+          ${(f.blind_count||0)>0?`<span class="tag tag-bld">블라인드 ${f.blind_count}</span>`:''}
           <svg class="chevron open" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
         </div>
       </div>
       <div style="border-top:1px solid #f3f4f6">${bHtml}</div>`;
       sec.appendChild(fc);
     });
-    body.appendChild(sec);
+    if(anyFileShown) body.appendChild(sec);
   });
   if(!data.proposal_types.length) body.innerHTML='<div class="text-center text-gray" style="padding:4rem">검토된 파일이 없습니다.</div>';
+}
+
+function setResultFilter(cat){
+  activeResultFilter = (activeResultFilter===cat) ? null : cat;
+  renderResultBody();
 }
 
 function toggleCard(hdr){
@@ -1220,6 +1675,8 @@ function updateApiHint(){
 $('l-api')?.addEventListener('input', updateApiHint);
 
 /* ── 초기화 ───────────────────────────────────────────── */
+initRememberedUser();
+updateDetectionCount();
 if(tk()){
   api('/api/auth/me').then(d=>{ if(d?.username)localStorage.setItem('username',d.username); show('dashboard'); }).catch(()=>show('login'));
 }
