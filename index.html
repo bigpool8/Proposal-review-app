@@ -1461,7 +1461,7 @@ function adviceText(cat, det){
     if (d.includes('가장')) return `"${d}"는 비교 기준·출처가 없으면 과장 표현으로 판단될 수 있습니다.`;
     return `"${d}"는 객관적 근거 없이 쓰이면 허위·과장 표현으로 판단될 수 있습니다.`;
   }
-  if (cat==='competitor') return '경쟁사를 직접 언급한 우위 주장은 감점 사유가 될 수 있습니다. 자사 실적 중심으로 서술하세요.';
+  if (cat==='competitor') return '객관적 사실없이 경쟁사를 비교/비방하는 것은 감점 사유가 될 수 있습니다.';
   if (cat==='blind') return '회사명, 대표자명 등 회사식별정보 표기는 제안사를 특정할 수 있어 블라인드 평가 위반 소지가 있습니다.';
   if (cat==='blind_image') return '로고·CI 이미지는 블라인드 평가 시 삭제하거나 가려야 합니다.';
   return '';
