@@ -456,21 +456,21 @@ input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5
     <div class="det-grid">
       <div class="det-card">
         <div class="det-card-top" onclick="toggleDetCard(event,'superlative-eval-chk')">
-          <span class="det-icon tag-sup">최</span>
+          <span class="det-icon tag-sup"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 01-8 0V4z"/><path d="M8 5H5.5A1.5 1.5 0 007 7.5"/><path d="M16 5h2.5A1.5 1.5 0 0117 7.5"/><path d="M12 12v4"/><path d="M9 19h6"/></svg></span>
           <div class="det-card-text"><p class="det-title">최상급 표현 검출</p><p class="det-desc">최초·최대·유일 등 허위·과장으로 오인될 수 있는 표현을 찾습니다.</p></div>
           <input type="checkbox" id="superlative-eval-chk" checked onchange="markCard('superlative-eval-chk');updateDetectionCount()">
         </div>
       </div>
       <div class="det-card">
         <div class="det-card-top" onclick="toggleDetCard(event,'typo-eval-chk')">
-          <span class="det-icon tag-typ">오</span>
+          <span class="det-icon tag-typ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5a2.1 2.1 0 013 3L9 17.5 4.5 19 6 14.5 17 3.5z"/><path d="M14 18h4"/></svg></span>
           <div class="det-card-text"><p class="det-title">오타 검출</p><p class="det-desc">한글·영문 맞춤법과 철자 오류를 찾고 수정안을 제시합니다.</p></div>
           <input type="checkbox" id="typo-eval-chk" onchange="markCard('typo-eval-chk');updateDetectionCount()">
         </div>
       </div>
       <div class="det-card">
         <div class="det-card-top" onclick="toggleDetCard(event,'competitor-eval-chk')">
-          <span class="det-icon tag-cmp">경</span>
+          <span class="det-icon tag-cmp"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v17"/><path d="M9 20h6"/><path d="M4 7h16"/><path d="M4 7l-2.3 5a2.3 2.3 0 004.6 0L4 7z"/><path d="M20 7l-2.3 5a2.3 2.3 0 004.6 0L20 7z"/></svg></span>
           <div class="det-card-text"><p class="det-title">경쟁사 비교·비방 표현</p><p class="det-desc">경쟁사를 직접 비교하거나 비방하는 문구를 찾습니다.</p></div>
           <input type="checkbox" id="competitor-eval-chk" onchange="toggleCompetitorEval()">
         </div>
@@ -482,7 +482,7 @@ input[type=text].kw-input,select.kw-select{height:2.25rem;border:1px solid #d1d5
       </div>
       <div class="det-card">
         <div class="det-card-top" onclick="toggleDetCard(event,'blind-eval-chk')">
-          <span class="det-icon tag-bld">블</span>
+          <span class="det-icon tag-bld"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.3A10.6 10.6 0 0112 5c5 0 9 5 9 7a12.9 12.9 0 01-2.3 2.9"/><path d="M6.4 6.7C4.1 8.3 3 10.6 3 12c0 2 4 7 9 7a9.6 9.6 0 004-.9"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/></svg></span>
           <div class="det-card-text"><p class="det-title">블라인드 평가</p><p class="det-desc">회사명·로고·대표자명 등 회사 식별정보를 텍스트와 이미지에서 찾습니다.</p></div>
           <input type="checkbox" id="blind-eval-chk" onchange="toggleBlindEval()">
         </div>
