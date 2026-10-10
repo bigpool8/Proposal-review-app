@@ -1559,7 +1559,7 @@ function renderResultBody(){
       <div class="sidebar-file" onclick="document.getElementById('file-card-${f.file_id}')?.scrollIntoView({behavior:'smooth',block:'start'})" style="margin-bottom:.5rem">
         <span class="sidebar-file-icon">${(f.original_filename||'?').split('.').pop().slice(0,3).toUpperCase()}</span>
         <div style="min-width:0">
-          <p class="text-xs bold truncate" style="color:#111827;max-width:9rem">${esc(f.original_filename)}</p>
+          <p class="text-xs bold truncate" style="color:#111827;max-width:9rem" title="${escAttr(f.original_filename)}">${esc(f.original_filename)}</p>
           <p class="text-xs text-gray mono">${f.total_pages?f.total_pages+'페이지 · ':''}${(f.results||[]).length}건</p>
         </div>
       </div>`).join('') || '<p class="text-xs text-gray">파일 없음</p>';
@@ -1630,7 +1630,7 @@ function renderResultBody(){
       const fc=document.createElement('div'); fc.className='result-file'; fc.id=`file-card-${f.file_id}`;
       fc.innerHTML=`<div class="result-file-hdr" onclick="toggleCard(this)">
         <div class="flex items-center gap-2" style="min-width:0">
-          <span class="bold truncate" style="font-size:.9375rem">${esc(f.original_filename)}</span>
+          <span class="bold truncate" style="font-size:.9375rem" title="${escAttr(f.original_filename)}">${esc(f.original_filename)}</span>
           ${f.total_pages!=null?`<span class="text-xs text-gray mono" style="flex-shrink:0">${f.total_pages}p</span>`:''}
         </div>
         <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:1rem">
